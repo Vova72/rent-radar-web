@@ -4,12 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Фильтры Rent Radar</title>
-    <!-- Подключаем библиотеку Telegram Web App -->
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
-        /* Делаем дизайн под стиль Телеграма */
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             background-color: var(--tg-theme-bg-color, #ffffff);
             color: var(--tg-theme-text-color, #000000);
             padding: 20px;
@@ -21,15 +19,9 @@
             font-size: 14px;
             text-transform: uppercase;
         }
-        .section {
-            margin-bottom: 25px;
-        }
-        label {
-            display: block;
-            margin-bottom: 10px;
-            font-size: 16px;
-        }
-        input[type="number"] {
+        .section { margin-bottom: 25px; }
+        label { display: block; margin-bottom: 10px; font-size: 16px; }
+        input[type="number"], input[type="text"] {
             width: 100%;
             padding: 10px;
             margin-top: 5px;
@@ -40,25 +32,21 @@
             color: var(--tg-theme-text-color, #000);
             font-size: 16px;
         }
-        .row {
-            display: flex;
-            gap: 10px;
-        }
+        .row { display: flex; gap: 10px; }
     </style>
 </head>
 <body>
 
     <div class="section">
         <h3>Что ищем?</h3>
-        <label><input type="checkbox" id="mode_apt" value="apartment" checked> Квартиры (Mietwohnungen)</label>
-        <label><input type="checkbox" id="mode_wg" value="wg_zimmer"> Комнаты (WG-Zimmer)</label>
+        <label><input type="checkbox" id="mode_apt" value="apartment" checked> Квартиры</label>
+        <label><input type="checkbox" id="mode_wg" value="wg_zimmer"> Комнаты (WG)</label>
     </div>
 
+    <!-- ТЕПЕРЬ ТУТ ТЕКСТОВОЕ ПОЛЕ -->
     <div class="section">
-        <h3>Города</h3>
-        <label><input type="checkbox" class="city-checkbox" value="Wien" checked> Вена</label>
-        <label><input type="checkbox" class="city-checkbox" value="Graz"> Грац</label>
-        <label><input type="checkbox" class="city-checkbox" value="Linz"> Линц</label>
+        <h3>Города или Индексы (через запятую)</h3>
+        <input type="text" id="locations" placeholder="Например: Wien, Graz, 4300">
     </div>
 
     <div class="section">
@@ -66,6 +54,15 @@
         <div class="row">
             <input type="number" id="price_min" placeholder="От">
             <input type="number" id="price_max" placeholder="До">
+        </div>
+    </div>
+    
+    <!-- НОВОЕ ПОЛЕ ПЛОЩАДИ -->
+    <div class="section">
+        <h3>Площадь (м²)</h3>
+        <div class="row">
+            <input type="number" id="sq_min" placeholder="От">
+            <input type="number" id="sq_max" placeholder="До">
         </div>
     </div>
 
@@ -78,45 +75,30 @@
     </div>
 
     <script>
-        // Инициализация Telegram Web App
         const tg = window.Telegram.WebApp;
-        tg.expand(); // Открываем на весь экран
-
-        // Настраиваем красивую кнопку внизу экрана
+        tg.expand();
         tg.MainButton.text = "СОХРАНИТЬ ФИЛЬТРЫ";
         tg.MainButton.show();
 
-        // Что происходит при нажатии на кнопку
         tg.MainButton.onClick(() => {
-            
-            // Собираем выбранные режимы (квартиры/комнаты)
             let searchModes = [];
             if (document.getElementById('mode_apt').checked) searchModes.push('apartment');
             if (document.getElementById('mode_wg').checked) searchModes.push('wg_zimmer');
 
-            // Собираем выбранные города
-            let locations = [];
-            document.querySelectorAll('.city-checkbox:checked').forEach(cb => locations.push(cb.value));
+            // Разбиваем строку с городами на массив
+            let locString = document.getElementById('locations').value;
+            let locations = locString.split(',').map(s => s.trim()).filter(s => s.length > 0);
 
-            // Собираем числа (превращаем текст в числа или оставляем null)
             const getVal = (id) => document.getElementById(id).value ? parseInt(document.getElementById(id).value) : null;
 
-            // Формируем тот самый JSON, который мы спроектировали!
             const data = {
                 search_modes: searchModes,
                 locations: locations,
-                price: {
-                    min: getVal('price_min'),
-                    max: getVal('price_max')
-                },
-                rooms: {
-                    min: getVal('rooms_min'),
-                    max: getVal('rooms_max')
-                },
-                square_meters: { min: null, max: null } // Оставим задел на будущее
+                price: { min: getVal('price_min'), max: getVal('price_max') },
+                rooms: { min: getVal('rooms_min'), max: getVal('rooms_max') },
+                square_meters: { min: getVal('sq_min'), max: getVal('sq_max') }
             };
 
-            // Отправляем JSON в бота и закрываем окно
             tg.sendData(JSON.stringify(data));
         });
     </script>
