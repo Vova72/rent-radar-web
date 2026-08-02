@@ -44,9 +44,28 @@
     </div>
 
     <!-- ТЕПЕРЬ ТУТ ТЕКСТОВОЕ ПОЛЕ -->
+    <!-- Замени старый блок с городами на этот -->
     <div class="section">
-        <h3>Города или Индексы (через запятую)</h3>
-        <input type="text" id="locations" placeholder="Например: Wien, Graz, 4300">
+        <h3>Города или Индексы</h3>
+        <div style="position: relative;">
+            <input type="text" id="location_input" placeholder="Начни вводить (например: Wien или 1090)..." autocomplete="off" oninput="searchLocation()">
+            
+            <!-- Контейнер для выпадающих подсказок -->
+            <div id="suggestions" style="
+                display: none; 
+                position: absolute; 
+                width: 100%; 
+                background: var(--tg-theme-bg-color, #fff); 
+                border: 1px solid var(--tg-theme-hint-color, #ccc); 
+                max-height: 150px; 
+                overflow-y: auto; 
+                z-index: 100;
+                box-shadow: 0px 4px 6px rgba(0,0,0,0.1);
+            "></div>
+        </div>
+    
+        <!-- Сюда будут падать выбранные города в виде красивых тегов -->
+        <div id="selected_locations" style="margin-top: 10px; display: flex; flex-wrap: wrap; gap: 5px;"></div>
     </div>
 
     <div class="section">
@@ -101,6 +120,79 @@
 
             tg.sendData(JSON.stringify(data));
         });
+
+        // Массив для хранения выбранных городов
+        let selectedLocations = [];
+
+        async function searchLocation() {
+            const query = document.getElementById('location_input').value;
+            const suggestionsBox = document.getElementById('suggestions');
+            
+            if (query.length < 2) {
+                suggestionsBox.style.display = 'none';
+                return;
+            }
+
+            // Обращаемся к универсальному и бесплатному API OpenStreetMap (только Австрия)
+            const url = `https://nominatim.openstreetmap.org/search?countrycodes=at&format=json&addressdetails=1&q=${encodeURIComponent(query)}`;
+            
+            try {
+                const response = await fetch(url);
+                const data = await response.json();
+                
+                suggestionsBox.innerHTML = ''; // Очищаем старые результаты
+                
+                if (data.length > 0) {
+                    suggestionsBox.style.display = 'block';
+                    data.forEach(place => {
+                        // Пытаемся достать город и индекс
+                        const city = place.address.city || place.address.town || place.address.village || place.name;
+                        const postcode = place.address.postcode || "";
+                        const displayName = postcode ? `${postcode} ${city}` : city;
+
+                        const div = document.createElement('div');
+                        div.style.padding = '10px';
+                        div.style.borderBottom = '1px solid #eee';
+                        div.style.cursor = 'pointer';
+                        div.innerText = displayName;
+                        
+                        // Что происходит при клике на подсказку
+                        div.onclick = () => {
+                            if (!selectedLocations.includes(displayName)) {
+                                selectedLocations.push(displayName);
+                                renderSelectedLocations();
+                            }
+                            document.getElementById('location_input').value = '';
+                            suggestionsBox.style.display = 'none';
+                        };
+                        suggestionsBox.appendChild(div);
+                    });
+                } else {
+                    suggestionsBox.style.display = 'none';
+                }
+            } catch (error) {
+                console.error("Ошибка API подсказок:", error);
+            }
+        }
+
+        function renderSelectedLocations() {
+            const container = document.getElementById('selected_locations');
+            container.innerHTML = '';
+            selectedLocations.forEach(loc => {
+                const tag = document.createElement('span');
+                tag.style.background = 'var(--tg-theme-button-color, #3390ec)';
+                tag.style.color = 'var(--tg-theme-button-text-color, #fff)';
+                tag.style.padding = '5px 10px';
+                tag.style.borderRadius = '15px';
+                tag.style.fontSize = '14px';
+                tag.innerText = loc + ' ✕';
+                tag.onclick = () => {
+                    selectedLocations = selectedLocations.filter(l => l !== loc);
+                    renderSelectedLocations();
+                };
+                container.appendChild(tag);
+            });
+        }
     </script>
 </body>
 </html>
