@@ -18,6 +18,7 @@
             color: var(--tg-theme-hint-color, #999999);
             font-size: 14px;
             text-transform: uppercase;
+            margin-bottom: 15px;
         }
         .section { margin-bottom: 25px; }
         label { display: block; margin-bottom: 10px; font-size: 16px; }
@@ -32,7 +33,14 @@
             color: var(--tg-theme-text-color, #000);
             font-size: 16px;
         }
-        .row { display: flex; gap: 10px; }
+        /* Стилизация ползунков под дизайн */
+        input[type="range"] {
+            width: 100%;
+            margin-bottom: 5px;
+            accent-color: var(--tg-theme-button-color, #3390ec);
+        }
+        .row { display: flex; gap: 15px; }
+        .col { flex: 1; display: flex; flex-direction: column; }
     </style>
 </head>
 <body>
@@ -56,24 +64,42 @@
     <div class="section">
         <h3>Цена (€)</h3>
         <div class="row">
-            <input type="number" id="price_min" placeholder="От">
-            <input type="number" id="price_max" placeholder="До">
+            <div class="col">
+                <input type="range" id="price_min_range" min="0" max="3000" step="50" value="0">
+                <input type="number" id="price_min" placeholder="От">
+            </div>
+            <div class="col">
+                <input type="range" id="price_max_range" min="0" max="3000" step="50" value="3000">
+                <input type="number" id="price_max" placeholder="До">
+            </div>
         </div>
     </div>
     
     <div class="section">
         <h3>Площадь (м²)</h3>
         <div class="row">
-            <input type="number" id="sq_min" placeholder="От">
-            <input type="number" id="sq_max" placeholder="До">
+            <div class="col">
+                <input type="range" id="sq_min_range" min="0" max="200" step="5" value="0">
+                <input type="number" id="sq_min" placeholder="От">
+            </div>
+            <div class="col">
+                <input type="range" id="sq_max_range" min="0" max="200" step="5" value="200">
+                <input type="number" id="sq_max" placeholder="До">
+            </div>
         </div>
     </div>
 
     <div class="section">
         <h3>Комнаты</h3>
         <div class="row">
-            <input type="number" id="rooms_min" placeholder="От">
-            <input type="number" id="rooms_max" placeholder="До">
+            <div class="col">
+                <input type="range" id="rooms_min_range" min="1" max="6" step="1" value="1">
+                <input type="number" id="rooms_min" placeholder="От">
+            </div>
+            <div class="col">
+                <input type="range" id="rooms_max_range" min="1" max="6" step="1" value="6">
+                <input type="number" id="rooms_max" placeholder="До">
+            </div>
         </div>
     </div>
 
@@ -83,6 +109,31 @@
         tg.MainButton.text = "СОХРАНИТЬ ФИЛЬТРЫ";
         tg.MainButton.show();
 
+        // --- ЛОГИКА СИНХРОНИЗАЦИИ ПОЛЗУНКОВ И ПОЛЕЙ ---
+        function syncInputs(rangeId, numberId) {
+            const range = document.getElementById(rangeId);
+            const num = document.getElementById(numberId);
+
+            range.addEventListener('input', () => {
+                num.value = range.value > 0 ? range.value : ''; // Оставляем поле пустым, если 0
+            });
+
+            num.addEventListener('input', () => {
+                if (num.value !== '') {
+                    range.value = num.value;
+                }
+            });
+        }
+
+        // Связываем все пары
+        syncInputs('price_min_range', 'price_min');
+        syncInputs('price_max_range', 'price_max');
+        syncInputs('sq_min_range', 'sq_min');
+        syncInputs('sq_max_range', 'sq_max');
+        syncInputs('rooms_min_range', 'rooms_min');
+        syncInputs('rooms_max_range', 'rooms_max');
+
+        // --- ЛОГИКА АВТОЗАПОЛНЕНИЯ ГОРОДОВ ---
         let selectedLocations = [];
         let debounceTimer;
 
@@ -159,14 +210,13 @@
             });
         }
 
-        // Кнопка сохранения с отловом ошибок
+        // --- СОХРАНЕНИЕ ---
         tg.MainButton.onClick(() => {
             try {
                 let searchModes = [];
                 if (document.getElementById('mode_apt').checked) searchModes.push('apartment');
                 if (document.getElementById('mode_wg').checked) searchModes.push('wg_zimmer');
 
-                // Безопасное получение значений
                 const getVal = (id) => {
                     const el = document.getElementById(id);
                     return (el && el.value) ? parseInt(el.value) : null;
@@ -182,7 +232,6 @@
 
                 tg.sendData(JSON.stringify(data));
             } catch (e) {
-                // Если код упал, мы точно увидим почему!
                 tg.showAlert("Ошибка сборки данных: " + e.message);
             }
         });
