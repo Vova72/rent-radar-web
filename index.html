@@ -43,28 +43,13 @@
         <label><input type="checkbox" id="mode_wg" value="wg_zimmer"> Комнаты (WG)</label>
     </div>
 
-    <!-- ТЕПЕРЬ ТУТ ТЕКСТОВОЕ ПОЛЕ -->
-    <!-- Замени старый блок с городами на этот -->
     <div class="section">
         <h3>Города или Индексы</h3>
         <div style="position: relative;">
             <input type="text" id="location_input" placeholder="Начни вводить (например: Wien или 1090)..." autocomplete="off" oninput="searchLocation()">
             
-            <!-- Контейнер для выпадающих подсказок -->
-            <div id="suggestions" style="
-                display: none; 
-                position: absolute; 
-                width: 100%; 
-                background: var(--tg-theme-bg-color, #fff); 
-                border: 1px solid var(--tg-theme-hint-color, #ccc); 
-                max-height: 150px; 
-                overflow-y: auto; 
-                z-index: 100;
-                box-shadow: 0px 4px 6px rgba(0,0,0,0.1);
-            "></div>
+            <div id="suggestions" style="display: none; position: absolute; width: 100%; background: var(--tg-theme-bg-color, #fff); border: 1px solid var(--tg-theme-hint-color, #ccc); max-height: 150px; overflow-y: auto; z-index: 100; box-shadow: 0px 4px 6px rgba(0,0,0,0.1);"></div>
         </div>
-    
-        <!-- Сюда будут падать выбранные города в виде красивых тегов -->
         <div id="selected_locations" style="margin-top: 10px; display: flex; flex-wrap: wrap; gap: 5px;"></div>
     </div>
 
@@ -76,7 +61,6 @@
         </div>
     </div>
     
-    <!-- НОВОЕ ПОЛЕ ПЛОЩАДИ -->
     <div class="section">
         <h3>Площадь (м²)</h3>
         <div class="row">
@@ -99,30 +83,8 @@
         tg.MainButton.text = "СОХРАНИТЬ ФИЛЬТРЫ";
         tg.MainButton.show();
 
-        tg.MainButton.onClick(() => {
-            let searchModes = [];
-            if (document.getElementById('mode_apt').checked) searchModes.push('apartment');
-            if (document.getElementById('mode_wg').checked) searchModes.push('wg_zimmer');
-
-            // Разбиваем строку с городами на массив
-            let locString = document.getElementById('locations').value;
-            let locations = locString.split(',').map(s => s.trim()).filter(s => s.length > 0);
-
-            const getVal = (id) => document.getElementById(id).value ? parseInt(document.getElementById(id).value) : null;
-
-            const data = {
-                search_modes: searchModes,
-                locations: locations,
-                price: { min: getVal('price_min'), max: getVal('price_max') },
-                rooms: { min: getVal('rooms_min'), max: getVal('rooms_max') },
-                square_meters: { min: getVal('sq_min'), max: getVal('sq_max') }
-            };
-
-            tg.sendData(JSON.stringify(data));
-        });
-
-        // Массив для хранения выбранных городов
         let selectedLocations = [];
+        let debounceTimer;
 
         async function searchLocation() {
             const query = document.getElementById('location_input').value;
@@ -133,46 +95,49 @@
                 return;
             }
 
-            // Обращаемся к универсальному и бесплатному API OpenStreetMap (только Австрия)
-            const url = `https://nominatim.openstreetmap.org/search?countrycodes=at&format=json&addressdetails=1&accept-language=de&q=${encodeURIComponent(query)}`;
-            
-            try {
-                const response = await fetch(url);
-                const data = await response.json();
-                
-                suggestionsBox.innerHTML = ''; // Очищаем старые результаты
-                
-                if (data.length > 0) {
-                    suggestionsBox.style.display = 'block';
-                    data.forEach(place => {
-                        // Пытаемся достать город и индекс
-                        const city = place.address.city || place.address.town || place.address.village || place.name;
-                        const postcode = place.address.postcode || "";
-                        const displayName = postcode ? `${postcode} ${city}` : city;
+            clearTimeout(debounceTimer);
 
-                        const div = document.createElement('div');
-                        div.style.padding = '10px';
-                        div.style.borderBottom = '1px solid #eee';
-                        div.style.cursor = 'pointer';
-                        div.innerText = displayName;
-                        
-                        // Что происходит при клике на подсказку
-                        div.onclick = () => {
-                            if (!selectedLocations.includes(displayName)) {
-                                selectedLocations.push(displayName);
-                                renderSelectedLocations();
-                            }
-                            document.getElementById('location_input').value = '';
-                            suggestionsBox.style.display = 'none';
-                        };
-                        suggestionsBox.appendChild(div);
+            debounceTimer = setTimeout(async () => {
+                const url = `https://nominatim.openstreetmap.org/search?countrycodes=at&format=json&addressdetails=1&accept-language=de&q=${encodeURIComponent(query)}`;
+                
+                try {
+                    const response = await fetch(url, {
+                        headers: { "Accept-Language": "de-AT,de;q=0.9" }
                     });
-                } else {
-                    suggestionsBox.style.display = 'none';
+                    const data = await response.json();
+                    
+                    suggestionsBox.innerHTML = ''; 
+                    
+                    if (data.length > 0) {
+                        suggestionsBox.style.display = 'block';
+                        data.forEach(place => {
+                            const city = place.address.city || place.address.town || place.address.village || place.name;
+                            const postcode = place.address.postcode || "";
+                            const displayName = postcode ? `${postcode} ${city}` : city;
+
+                            const div = document.createElement('div');
+                            div.style.padding = '10px';
+                            div.style.borderBottom = '1px solid #eee';
+                            div.style.cursor = 'pointer';
+                            div.innerText = displayName;
+                            
+                            div.onclick = () => {
+                                if (!selectedLocations.includes(displayName)) {
+                                    selectedLocations.push(displayName);
+                                    renderSelectedLocations();
+                                }
+                                document.getElementById('location_input').value = '';
+                                suggestionsBox.style.display = 'none';
+                            };
+                            suggestionsBox.appendChild(div);
+                        });
+                    } else {
+                        suggestionsBox.style.display = 'none';
+                    }
+                } catch (error) {
+                    console.error("Ошибка API подсказок:", error);
                 }
-            } catch (error) {
-                console.error("Ошибка API подсказок:", error);
-            }
+            }, 500); 
         }
 
         function renderSelectedLocations() {
@@ -193,6 +158,34 @@
                 container.appendChild(tag);
             });
         }
+
+        // Кнопка сохранения с отловом ошибок
+        tg.MainButton.onClick(() => {
+            try {
+                let searchModes = [];
+                if (document.getElementById('mode_apt').checked) searchModes.push('apartment');
+                if (document.getElementById('mode_wg').checked) searchModes.push('wg_zimmer');
+
+                // Безопасное получение значений
+                const getVal = (id) => {
+                    const el = document.getElementById(id);
+                    return (el && el.value) ? parseInt(el.value) : null;
+                };
+
+                const data = {
+                    search_modes: searchModes,
+                    locations: selectedLocations,
+                    price: { min: getVal('price_min'), max: getVal('price_max') },
+                    rooms: { min: getVal('rooms_min'), max: getVal('rooms_max') },
+                    square_meters: { min: getVal('sq_min'), max: getVal('sq_max') }
+                };
+
+                tg.sendData(JSON.stringify(data));
+            } catch (e) {
+                // Если код упал, мы точно увидим почему!
+                tg.showAlert("Ошибка сборки данных: " + e.message);
+            }
+        });
     </script>
 </body>
 </html>
