@@ -12,20 +12,27 @@
             color: var(--tg-theme-text-color, #000000);
             padding: 20px;
             margin: 0;
+            padding-bottom: 80px; /* Отступ для главной кнопки ТГ */
         }
         h3 {
             margin-top: 0;
             color: var(--tg-theme-hint-color, #999999);
             font-size: 14px;
             text-transform: uppercase;
-            margin-bottom: 15px;
+            margin-bottom: 10px;
         }
-        .section { margin-bottom: 25px; }
-        label { display: block; margin-bottom: 10px; font-size: 16px; }
-        input[type="number"], input[type="text"] {
+        .section { margin-bottom: 30px; }
+        
+        label.checkbox-label { 
+            display: flex; 
+            align-items: center;
+            margin-bottom: 10px; 
+            font-size: 16px; 
+        }
+        input[type="checkbox"] { margin-right: 10px; width: 18px; height: 18px; }
+        input[type="text"] {
             width: 100%;
             padding: 10px;
-            margin-top: 5px;
             box-sizing: border-box;
             border: 1px solid var(--tg-theme-hint-color, #ccc);
             border-radius: 8px;
@@ -33,73 +40,118 @@
             color: var(--tg-theme-text-color, #000);
             font-size: 16px;
         }
-        /* Стилизация ползунков под дизайн */
-        input[type="range"] {
-            width: 100%;
-            margin-bottom: 5px;
-            accent-color: var(--tg-theme-button-color, #3390ec);
+
+        /* --- МАГИЯ ДВОЙНОГО ПОЛЗУНКА --- */
+        .slider-header {
+            display: flex;
+            justify-content: space-between;
+            font-weight: bold;
+            font-size: 16px;
+            margin-bottom: 15px;
         }
-        .row { display: flex; gap: 15px; }
-        .col { flex: 1; display: flex; flex-direction: column; }
+        .dual-slider-container {
+            position: relative;
+            width: 100%;
+            height: 30px;
+        }
+        .slider-track {
+            position: absolute;
+            width: 100%;
+            height: 4px;
+            background-color: var(--tg-theme-hint-color, #d3d3d3);
+            border-radius: 4px;
+            top: 50%;
+            transform: translateY(-50%);
+        }
+        .slider-progress {
+            position: absolute;
+            height: 4px;
+            background-color: var(--tg-theme-button-color, #3390ec);
+            border-radius: 4px;
+            top: 50%;
+            transform: translateY(-50%);
+            z-index: 1;
+        }
+        .dual-slider-container input[type="range"] {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            top: 0;
+            margin: 0;
+            background: transparent;
+            -webkit-appearance: none;
+            pointer-events: none; /* Пропускаем клики сквозь инпут */
+            z-index: 2;
+        }
+        .dual-slider-container input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 24px;
+            width: 24px;
+            border-radius: 50%;
+            background-color: var(--tg-theme-button-color, #3390ec);
+            border: 3px solid #ffffff;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.3);
+            pointer-events: auto; /* Возвращаем клики только на кружочки */
+            cursor: pointer;
+        }
     </style>
 </head>
 <body>
 
     <div class="section">
         <h3>Что ищем?</h3>
-        <label><input type="checkbox" id="mode_apt" value="apartment" checked> Квартиры</label>
-        <label><input type="checkbox" id="mode_wg" value="wg_zimmer"> Комнаты (WG)</label>
+        <label class="checkbox-label"><input type="checkbox" id="mode_apt" value="apartment" checked> Квартиры</label>
+        <label class="checkbox-label"><input type="checkbox" id="mode_wg" value="wg_zimmer"> Комнаты (WG)</label>
     </div>
 
     <div class="section">
         <h3>Города или Индексы</h3>
         <div style="position: relative;">
             <input type="text" id="location_input" placeholder="Начни вводить (например: Wien или 1090)..." autocomplete="off" oninput="searchLocation()">
-            
             <div id="suggestions" style="display: none; position: absolute; width: 100%; background: var(--tg-theme-bg-color, #fff); border: 1px solid var(--tg-theme-hint-color, #ccc); max-height: 150px; overflow-y: auto; z-index: 100; box-shadow: 0px 4px 6px rgba(0,0,0,0.1);"></div>
         </div>
         <div id="selected_locations" style="margin-top: 10px; display: flex; flex-wrap: wrap; gap: 5px;"></div>
     </div>
 
     <div class="section">
-        <h3>Цена (€)</h3>
-        <div class="row">
-            <div class="col">
-                <input type="range" id="price_min_range" min="0" max="3000" step="50" value="0">
-                <input type="number" id="price_min" placeholder="От">
-            </div>
-            <div class="col">
-                <input type="range" id="price_max_range" min="0" max="3000" step="50" value="3000">
-                <input type="number" id="price_max" placeholder="До">
-            </div>
+        <h3>Цена</h3>
+        <div class="slider-header">
+            <span id="price_display_min">€0</span>
+            <span id="price_display_max">€3000+</span>
+        </div>
+        <div class="dual-slider-container">
+            <div class="slider-track"></div>
+            <div class="slider-progress" id="price_progress"></div>
+            <input type="range" id="price_min" min="0" max="3000" step="50" value="0">
+            <input type="range" id="price_max" min="0" max="3000" step="50" value="3000">
         </div>
     </div>
     
     <div class="section">
-        <h3>Площадь (м²)</h3>
-        <div class="row">
-            <div class="col">
-                <input type="range" id="sq_min_range" min="0" max="200" step="5" value="0">
-                <input type="number" id="sq_min" placeholder="От">
-            </div>
-            <div class="col">
-                <input type="range" id="sq_max_range" min="0" max="200" step="5" value="200">
-                <input type="number" id="sq_max" placeholder="До">
-            </div>
+        <h3>Площадь</h3>
+        <div class="slider-header">
+            <span id="sq_display_min">0 м²</span>
+            <span id="sq_display_max">150+ м²</span>
+        </div>
+        <div class="dual-slider-container">
+            <div class="slider-track"></div>
+            <div class="slider-progress" id="sq_progress"></div>
+            <input type="range" id="sq_min" min="0" max="150" step="5" value="0">
+            <input type="range" id="sq_max" min="0" max="150" step="5" value="150">
         </div>
     </div>
 
     <div class="section">
         <h3>Комнаты</h3>
-        <div class="row">
-            <div class="col">
-                <input type="range" id="rooms_min_range" min="1" max="6" step="1" value="1">
-                <input type="number" id="rooms_min" placeholder="От">
-            </div>
-            <div class="col">
-                <input type="range" id="rooms_max_range" min="1" max="6" step="1" value="6">
-                <input type="number" id="rooms_max" placeholder="До">
-            </div>
+        <div class="slider-header">
+            <span id="rooms_display_min">1</span>
+            <span id="rooms_display_max">6+</span>
+        </div>
+        <div class="dual-slider-container">
+            <div class="slider-track"></div>
+            <div class="slider-progress" id="rooms_progress"></div>
+            <input type="range" id="rooms_min" min="1" max="6" step="1" value="1">
+            <input type="range" id="rooms_max" min="1" max="6" step="1" value="6">
         </div>
     </div>
 
@@ -109,29 +161,54 @@
         tg.MainButton.text = "СОХРАНИТЬ ФИЛЬТРЫ";
         tg.MainButton.show();
 
-        // --- ЛОГИКА СИНХРОНИЗАЦИИ ПОЛЗУНКОВ И ПОЛЕЙ ---
-        function syncInputs(rangeId, numberId) {
-            const range = document.getElementById(rangeId);
-            const num = document.getElementById(numberId);
+        // --- ЛОГИКА ДВОЙНЫХ ПОЛЗУНКОВ ---
+        function initDualSlider(idMin, idMax, idProgress, idDisplayMin, idDisplayMax, prefix, suffix) {
+            const minSlider = document.getElementById(idMin);
+            const maxSlider = document.getElementById(idMax);
+            const progress = document.getElementById(idProgress);
+            const displayMin = document.getElementById(idDisplayMin);
+            const displayMax = document.getElementById(idDisplayMax);
+            
+            const maxAllowed = parseInt(maxSlider.max);
+            const minAllowed = parseInt(minSlider.min);
 
-            range.addEventListener('input', () => {
-                num.value = range.value > 0 ? range.value : ''; // Оставляем поле пустым, если 0
-            });
+            function updateSlider(e) {
+                let minVal = parseInt(minSlider.value);
+                let maxVal = parseInt(maxSlider.value);
 
-            num.addEventListener('input', () => {
-                if (num.value !== '') {
-                    range.value = num.value;
+                // Не даем ползункам пересечься
+                if (minVal >= maxVal) {
+                    if (e.target === minSlider) {
+                        minSlider.value = maxVal - parseInt(minSlider.step);
+                        minVal = parseInt(minSlider.value);
+                    } else {
+                        maxSlider.value = minVal + parseInt(maxSlider.step);
+                        maxVal = parseInt(maxSlider.value);
+                    }
                 }
-            });
+
+                // Закрашиваем прогресс между точками
+                const minPercent = ((minVal - minAllowed) / (maxAllowed - minAllowed)) * 100;
+                const maxPercent = ((maxVal - minAllowed) / (maxAllowed - minAllowed)) * 100;
+                
+                progress.style.left = minPercent + "%";
+                progress.style.width = (maxPercent - minPercent) + "%";
+
+                // Обновляем текст (добавляем "+" если выбран максимум)
+                displayMin.innerText = prefix + minVal + suffix;
+                displayMax.innerText = prefix + (maxVal === maxAllowed ? maxVal + "+" : maxVal) + suffix;
+            }
+
+            minSlider.addEventListener('input', updateSlider);
+            maxSlider.addEventListener('input', updateSlider);
+            
+            // Инициализация при старте
+            updateSlider({target: minSlider});
         }
 
-        // Связываем все пары
-        syncInputs('price_min_range', 'price_min');
-        syncInputs('price_max_range', 'price_max');
-        syncInputs('sq_min_range', 'sq_min');
-        syncInputs('sq_max_range', 'sq_max');
-        syncInputs('rooms_min_range', 'rooms_min');
-        syncInputs('rooms_max_range', 'rooms_max');
+        initDualSlider('price_min', 'price_max', 'price_progress', 'price_display_min', 'price_display_max', '€', '');
+        initDualSlider('sq_min', 'sq_max', 'sq_progress', 'sq_display_min', 'sq_display_max', '', ' м²');
+        initDualSlider('rooms_min', 'rooms_max', 'rooms_progress', 'rooms_display_min', 'rooms_display_max', '', '');
 
         // --- ЛОГИКА АВТОЗАПОЛНЕНИЯ ГОРОДОВ ---
         let selectedLocations = [];
@@ -150,13 +227,9 @@
 
             debounceTimer = setTimeout(async () => {
                 const url = `https://nominatim.openstreetmap.org/search?countrycodes=at&format=json&addressdetails=1&accept-language=de&q=${encodeURIComponent(query)}`;
-                
                 try {
-                    const response = await fetch(url, {
-                        headers: { "Accept-Language": "de-AT,de;q=0.9" }
-                    });
+                    const response = await fetch(url, { headers: { "Accept-Language": "de-AT,de;q=0.9" } });
                     const data = await response.json();
-                    
                     suggestionsBox.innerHTML = ''; 
                     
                     if (data.length > 0) {
@@ -186,7 +259,7 @@
                         suggestionsBox.style.display = 'none';
                     }
                 } catch (error) {
-                    console.error("Ошибка API подсказок:", error);
+                    console.error("Ошибка API:", error);
                 }
             }, 500); 
         }
@@ -210,24 +283,28 @@
             });
         }
 
-        // --- СОХРАНЕНИЕ ---
+        // --- СОХРАНЕНИЕ С УМНОЙ ОТПРАВКОЙ NULL ---
         tg.MainButton.onClick(() => {
             try {
                 let searchModes = [];
                 if (document.getElementById('mode_apt').checked) searchModes.push('apartment');
                 if (document.getElementById('mode_wg').checked) searchModes.push('wg_zimmer');
 
-                const getVal = (id) => {
+                // Функция, которая отправляет null, если ползунок стоит на максимуме или минимуме
+                const getSmartVal = (id, isMax = false) => {
                     const el = document.getElementById(id);
-                    return (el && el.value) ? parseInt(el.value) : null;
+                    const val = parseInt(el.value);
+                    if (isMax && val === parseInt(el.max)) return null; // "Безлимит"
+                    if (!isMax && val === parseInt(el.min)) return null; // От нуля
+                    return val;
                 };
 
                 const data = {
                     search_modes: searchModes,
                     locations: selectedLocations,
-                    price: { min: getVal('price_min'), max: getVal('price_max') },
-                    rooms: { min: getVal('rooms_min'), max: getVal('rooms_max') },
-                    square_meters: { min: getVal('sq_min'), max: getVal('sq_max') }
+                    price: { min: getSmartVal('price_min'), max: getSmartVal('price_max', true) },
+                    rooms: { min: getSmartVal('rooms_min'), max: getSmartVal('rooms_max', true) },
+                    square_meters: { min: getSmartVal('sq_min'), max: getSmartVal('sq_max', true) }
                 };
 
                 tg.sendData(JSON.stringify(data));
