@@ -134,7 +134,7 @@
             }
 
             // Обращаемся к универсальному и бесплатному API OpenStreetMap (только Австрия)
-            const url = `https://nominatim.openstreetmap.org/search?countrycodes=at&format=json&addressdetails=1&q=${encodeURIComponent(query)}`;
+            const url = `https://nominatim.openstreetmap.org/search?countrycodes=at&format=json&addressdetails=1&accept-language=de&q=${encodeURIComponent(query)}`;
             
             try {
                 const response = await fetch(url);
