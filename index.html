@@ -210,6 +210,45 @@
         initDualSlider('sq_min', 'sq_max', 'sq_progress', 'sq_display_min', 'sq_display_max', '', ' м²');
         initDualSlider('rooms_min', 'rooms_max', 'rooms_progress', 'rooms_display_min', 'rooms_display_max', '', '');
 
+        // --- 1. HYDRATION: ПОДСТАНОВКА ПРОШЛЫХ ФИЛЬТРОВ ---
+        document.addEventListener("DOMContentLoaded", () => {
+            const urlParams = new URLSearchParams(window.location.search);
+
+            // Подставляем чекбоксы
+            if (urlParams.has('modes')) {
+                const modes = urlParams.get('modes').split(',');
+                document.getElementById('mode_apt').checked = modes.includes('apartment');
+                document.getElementById('mode_wg').checked = modes.includes('wg_zimmer');
+            }
+
+            // Подставляем сохраненные города
+            if (urlParams.has('cities')) {
+                const citiesStr = urlParams.get('cities');
+                if (citiesStr) {
+                    selectedLocations = citiesStr.split(',');
+                    renderSelectedLocations();
+                }
+            }
+
+            // Подставляем ползунки
+            const setSliderVal = (id, param) => {
+                if (urlParams.has(param)) {
+                    const slider = document.getElementById(id);
+                    slider.value = urlParams.get(param);
+                    // Важный момент: вызываем событие 'input', чтобы скрипт перерисовал визуал ползунка
+                    slider.dispatchEvent(new Event('input'));
+                }
+            };
+
+            setSliderVal('price_min', 'min_price');
+            setSliderVal('price_max', 'max_price');
+            setSliderVal('sq_min', 'min_sq');
+            setSliderVal('sq_max', 'max_sq');
+            setSliderVal('rooms_min', 'min_rooms');
+            setSliderVal('rooms_max', 'max_rooms');
+        });
+        // --- КОНЕЦ БЛОКА HYDRATION ---
+
         // --- ЛОГИКА АВТОЗАПОЛНЕНИЯ ГОРОДОВ ---
         let selectedLocations = [];
         let debounceTimer;
