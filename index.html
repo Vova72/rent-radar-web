@@ -161,11 +161,9 @@
         tg.MainButton.text = "СОХРАНИТЬ ФИЛЬТРЫ";
         tg.MainButton.show();
 
-        // Массив для хранения выбранных городов и таймер для API
         let selectedLocations = [];
         let debounceTimer; 
 
-        // Наша быстрая база
         const AUSTRIAN_LOCATIONS = [
             "Wien (Вся Вена)",
             "1010 Wien (Innere Stadt)", "1020 Wien (Leopoldstadt)", "1030 Wien (Landstraße)",
@@ -180,7 +178,42 @@
             "Wels", "St. Pölten", "Dornbirn", "Wiener Neustadt"
         ];
 
-        // --- СОХРАНЕНИЕ ДАННЫХ В ТЕЛЕГРАМ ---
+        // --- 1. ВОССТАНОВЛЕНИЕ ПРОШЛЫХ ФИЛЬТРОВ ИЗ URL ---
+        document.addEventListener("DOMContentLoaded", () => {
+            const urlParams = new URLSearchParams(window.location.search);
+            
+            // Восстанавливаем галочки (Тип жилья)
+            if (urlParams.has('modes')) {
+                const modes = urlParams.get('modes').split(',');
+                document.getElementById('mode_apt').checked = modes.includes('apartment');
+                document.getElementById('mode_wg').checked = modes.includes('wg_zimmer');
+            }
+
+            // Восстанавливаем выбранные города (теги)
+            if (urlParams.has('cities')) {
+                const cities = urlParams.get('cities').split(',');
+                cities.forEach(city => {
+                    if (city) addLocation(city);
+                });
+            }
+
+            // Восстанавливаем цифры в полях
+            const setVal = (id, param) => {
+                if (urlParams.has(param)) {
+                    const el = document.getElementById(id);
+                    if (el) el.value = urlParams.get(param);
+                }
+            };
+
+            setVal('price_min', 'min_price');
+            setVal('price_max', 'max_price');
+            setVal('sq_min', 'min_sq');
+            setVal('sq_max', 'max_sq');
+            setVal('rooms_min', 'min_rooms');
+            setVal('rooms_max', 'max_rooms');
+        });
+
+        // --- 2. СОХРАНЕНИЕ ДАННЫХ В ТЕЛЕГРАМ ---
         tg.MainButton.onClick(() => {
             let searchModes = [];
             if (document.getElementById('mode_apt').checked) searchModes.push('apartment');
@@ -190,7 +223,7 @@
 
             const data = {
                 search_modes: searchModes,
-                locations: selectedLocations, // Теперь берем данные прямо из массива, а не из текстового поля
+                locations: selectedLocations, 
                 price: { min: getVal('price_min'), max: getVal('price_max') },
                 rooms: { min: getVal('rooms_min'), max: getVal('rooms_max') },
                 square_meters: { min: getVal('sq_min'), max: getVal('sq_max') }
@@ -199,7 +232,7 @@
             tg.sendData(JSON.stringify(data));
         });
 
-        // --- ЛОГИКА ДОБАВЛЕНИЯ И ОТРИСОВКИ ГОРОДОВ ---
+        // --- 3. ЛОГИКА ДОБАВЛЕНИЯ И ОТРИСОВКИ ГОРОДОВ ---
         function addLocation(locName) {
             const cleanLoc = locName.trim();
             if (cleanLoc.length > 0 && !selectedLocations.includes(cleanLoc)) {
@@ -230,7 +263,7 @@
             });
         }
 
-        // --- ПОИСК И АВТОЗАПОЛНЕНИЕ ---
+        // --- 4. ПОИСК И АВТОЗАПОЛНЕНИЕ (ЛОКАЛЬНАЯ БАЗА + API) ---
         async function searchLocation() {
             const query = document.getElementById('location_input').value.trim();
             const suggestionsBox = document.getElementById('suggestions');
@@ -244,7 +277,6 @@
             suggestionsBox.innerHTML = ''; 
             suggestionsBox.style.display = 'block';
             
-            // 1. БЫСТРЫЙ ЛОКАЛЬНЫЙ ПОИСК
             const filtered = AUSTRIAN_LOCATIONS.filter(loc => loc.toLowerCase().includes(queryLower));
             let localCount = 0;
             
@@ -263,7 +295,6 @@
                 suggestionsBox.appendChild(div);
             });
 
-            // 2. ПОДКЛЮЧАЕМ API, ЕСЛИ ЮЗЕР ИЩЕТ РЕДКИЙ ГОРОД
             clearTimeout(debounceTimer);
             
             debounceTimer = setTimeout(async () => {
