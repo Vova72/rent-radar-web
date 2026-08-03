@@ -163,7 +163,50 @@
     <script>
         const tg = window.Telegram.WebApp;
         tg.expand();
-        tg.MainButton.text = "СОХРАНИТЬ ФИЛЬТРЫ";
+
+        // --- 0. СЛОВАРЬ ПЕРЕВОДОВ ---
+        const i18n = {
+            en: {
+                t_mode: "What are you looking for?", t_apt: "Apartments", t_wg: "Rooms (WG)",
+                t_loc: "Cities or Postcodes", t_loc_ph: "Start typing (e.g., Wien or 1090)...",
+                t_price: "Price", t_sq: "Area", t_rooms: "Rooms", btn_save: "SAVE FILTERS",
+                api_search: "Searching across Austria... ⏳", api_empty: "Nothing found 🤷‍♂️"
+            },
+            de: {
+                t_mode: "Was suchst du?", t_apt: "Wohnungen", t_wg: "Zimmer (WG)",
+                t_loc: "Städte oder PLZ", t_loc_ph: "Tippen beginnen (z.B. Wien oder 1090)...",
+                t_price: "Preis", t_sq: "Fläche", t_rooms: "Zimmer", btn_save: "FILTER SPEICHERN",
+                api_search: "Suche in Österreich... ⏳", api_empty: "Nichts gefunden 🤷‍♂️"
+            },
+            uk: {
+                t_mode: "Що шукаємо?", t_apt: "Квартири", t_wg: "Кімнати (WG)",
+                t_loc: "Міста або Індекси", t_loc_ph: "Почни вводити (наприклад: Wien або 1090)...",
+                t_price: "Ціна", t_sq: "Площа", t_rooms: "Кімнати", btn_save: "ЗБЕРЕГТИ ФІЛЬТРИ",
+                api_search: "Шукаємо по всій Австрії... ⏳", api_empty: "Нічого не знайдено 🤷‍♂️"
+            },
+            ru: {
+                t_mode: "Что ищем?", t_apt: "Квартиры", t_wg: "Комнаты (WG)",
+                t_loc: "Города или Индексы", t_loc_ph: "Начни вводить (например: Wien или 1090)...",
+                t_price: "Цена", t_sq: "Площадь", t_rooms: "Комнаты", btn_save: "СОХРАНИТЬ ФИЛЬТРЫ",
+                api_search: "Ищем по всей Австрии... ⏳", api_empty: "Ничего не найдено 🤷‍♂️"
+            }
+        };
+
+        // Определяем язык телефона (если не нашли - ставим английский)
+        let userLang = (tg.initDataUnsafe?.user?.language_code || 'en').substring(0, 2);
+        if (!['ru', 'uk', 'en', 'de'].includes(userLang)) userLang = 'en';
+
+        // Применяем переводы
+        document.getElementById('t_mode').innerText = i18n[userLang].t_mode;
+        document.getElementById('t_apt').innerText = i18n[userLang].t_apt;
+        document.getElementById('t_wg').innerText = i18n[userLang].t_wg;
+        document.getElementById('t_loc').innerText = i18n[userLang].t_loc;
+        document.getElementById('location_input').placeholder = i18n[userLang].t_loc_ph;
+        document.getElementById('t_price').innerText = i18n[userLang].t_price;
+        document.getElementById('t_sq').innerText = i18n[userLang].t_sq;
+        document.getElementById('t_rooms').innerText = i18n[userLang].t_rooms;
+        
+        tg.MainButton.text = i18n[userLang].btn_save;
         tg.MainButton.show();
 
         let selectedLocations = [];
