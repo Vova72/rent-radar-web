@@ -201,7 +201,12 @@
             const setVal = (id, param) => {
                 if (urlParams.has(param)) {
                     const el = document.getElementById(id);
-                    if (el) el.value = urlParams.get(param);
+                    if (el) {
+                        el.value = urlParams.get(param);
+                        // Имитируем физическое движение ползунка, чтобы обновились цифры UI
+                        el.dispatchEvent(new Event('input', { bubbles: true }));
+                        el.dispatchEvent(new Event('change', { bubbles: true }));
+                    }
                 }
             };
 
