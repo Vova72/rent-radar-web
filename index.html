@@ -178,18 +178,65 @@
             "Wels", "St. Pölten", "Dornbirn", "Wiener Neustadt"
         ];
 
-        // --- 1. ВОССТАНОВЛЕНИЕ ПРОШЛЫХ ФИЛЬТРОВ ИЗ URL ---
+        // --- 1. МАГИЯ ПОЛЗУНКОВ (Двигаем синюю полосу и обновляем текст) ---
+        function setupDualSlider(minId, maxId, progressId, minDisplayId, maxDisplayId, prefix, postfix, showPlusOnMax) {
+            const minSlider = document.getElementById(minId);
+            const maxSlider = document.getElementById(maxId);
+            const progress = document.getElementById(progressId);
+            const minDisplay = document.getElementById(minDisplayId);
+            const maxDisplay = document.getElementById(maxDisplayId);
+
+            function updateUI(e) {
+                let minVal = parseInt(minSlider.value);
+                let maxVal = parseInt(maxSlider.value);
+
+                // Не даем ползункам пересечься
+                if (minVal > maxVal) {
+                    if (e && e.target === minSlider) {
+                        minSlider.value = maxVal;
+                        minVal = maxVal;
+                    } else {
+                        maxSlider.value = minVal;
+                        maxVal = minVal;
+                    }
+                }
+
+                // Высчитываем проценты для синей полосы
+                const minPercent = ((minVal - minSlider.min) / (minSlider.max - minSlider.min)) * 100;
+                const maxPercent = ((maxVal - maxSlider.min) / (maxSlider.max - maxSlider.min)) * 100;
+
+                progress.style.left = minPercent + "%";
+                progress.style.right = (100 - maxPercent) + "%";
+
+                // Обновляем текст
+                minDisplay.innerText = `${prefix}${minVal}${postfix}`;
+                maxDisplay.innerText = `${prefix}${maxVal}${showPlusOnMax && maxVal == maxSlider.max ? '+' : ''}${postfix}`;
+            }
+
+            minSlider.addEventListener('input', updateUI);
+            maxSlider.addEventListener('input', updateUI);
+            
+            return updateUI; // Возвращаем функцию, чтобы дернуть её при загрузке
+        }
+
+        // --- 2. ИНИЦИАЛИЗАЦИЯ И ВОССТАНОВЛЕНИЕ ДАННЫХ ---
         document.addEventListener("DOMContentLoaded", () => {
+            
+            // Оживляем ползунки и сохраняем функции их обновления
+            const updatePrice = setupDualSlider('price_min', 'price_max', 'price_progress', 'price_display_min', 'price_display_max', '€', '', true);
+            const updateSq = setupDualSlider('sq_min', 'sq_max', 'sq_progress', 'sq_display_min', 'sq_display_max', '', ' м²', true);
+            const updateRooms = setupDualSlider('rooms_min', 'rooms_max', 'rooms_progress', 'rooms_display_min', 'rooms_display_max', '', '', true);
+
             const urlParams = new URLSearchParams(window.location.search);
             
-            // Восстанавливаем галочки (Тип жилья)
+            // Восстанавливаем галочки
             if (urlParams.has('modes')) {
                 const modes = urlParams.get('modes').split(',');
                 document.getElementById('mode_apt').checked = modes.includes('apartment');
                 document.getElementById('mode_wg').checked = modes.includes('wg_zimmer');
             }
 
-            // Восстанавливаем выбранные города (теги)
+            // Восстанавливаем города
             if (urlParams.has('cities')) {
                 const cities = urlParams.get('cities').split(',');
                 cities.forEach(city => {
@@ -197,28 +244,31 @@
                 });
             }
 
-            // Восстанавливаем цифры в полях
+            // Восстанавливаем цифры
             const setVal = (id, param) => {
                 if (urlParams.has(param)) {
                     const el = document.getElementById(id);
-                    if (el) {
-                        el.value = urlParams.get(param);
-                        // Имитируем физическое движение ползунка, чтобы обновились цифры UI
-                        el.dispatchEvent(new Event('input', { bubbles: true }));
-                        el.dispatchEvent(new Event('change', { bubbles: true }));
-                    }
+                    if (el) el.value = urlParams.get(param);
                 }
             };
 
-            setVal('price_min', 'min_price');
-            setVal('price_max', 'max_price');
-            setVal('sq_min', 'min_sq');
-            setVal('sq_max', 'max_sq');
-            setVal('rooms_min', 'min_rooms');
-            setVal('rooms_max', 'max_rooms');
+            // Если бот прислал сохраненные фильтры — подставляем их
+            if (urlParams.toString().length > 0) {
+                setVal('price_min', 'min_price');
+                setVal('price_max', 'max_price');
+                setVal('sq_min', 'min_sq');
+                setVal('sq_max', 'max_sq');
+                setVal('rooms_min', 'min_rooms');
+                setVal('rooms_max', 'max_rooms');
+            }
+            
+            // ПРИНУДИТЕЛЬНО обновляем интерфейс ползунков, чтобы они встали на свои места!
+            updatePrice();
+            updateSq();
+            updateRooms();
         });
 
-        // --- 2. СОХРАНЕНИЕ ДАННЫХ В ТЕЛЕГРАМ ---
+        // --- 3. СОХРАНЕНИЕ ДАННЫХ В ТЕЛЕГРАМ ---
         tg.MainButton.onClick(() => {
             let searchModes = [];
             if (document.getElementById('mode_apt').checked) searchModes.push('apartment');
@@ -237,7 +287,7 @@
             tg.sendData(JSON.stringify(data));
         });
 
-        // --- 3. ЛОГИКА ДОБАВЛЕНИЯ И ОТРИСОВКИ ГОРОДОВ ---
+        // --- 4. ЛОГИКА ДОБАВЛЕНИЯ ГОРОДОВ ---
         function addLocation(locName) {
             const cleanLoc = locName.trim();
             if (cleanLoc.length > 0 && !selectedLocations.includes(cleanLoc)) {
@@ -268,7 +318,7 @@
             });
         }
 
-        // --- 4. ПОИСК И АВТОЗАПОЛНЕНИЕ (ЛОКАЛЬНАЯ БАЗА + API) ---
+        // --- 5. ПОИСК И АВТОЗАПОЛНЕНИЕ (ЛОКАЛЬНАЯ БАЗА + API) ---
         async function searchLocation() {
             const query = document.getElementById('location_input').value.trim();
             const suggestionsBox = document.getElementById('suggestions');
