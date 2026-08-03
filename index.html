@@ -404,7 +404,7 @@
                 const loaderId = 'api_loader';
                 
                 if (localCount === 0) {
-                    suggestionsBox.innerHTML = `<div id="${loaderId}" style="padding: 10px; color: var(--tg-theme-hint-color, #999);">Ищем по всей Австрии... ⏳</div>`;
+                    suggestionsBox.innerHTML = `<div id="${loaderId}" style="padding: 10px; color: var(--tg-theme-hint-color, #999);">${i18n[userLang].api_search}</div>`;
                 }
 
                 try {
@@ -435,7 +435,7 @@
                             }
                         });
                     } else if (localCount === 0) {
-                         suggestionsBox.innerHTML = `<div style="padding: 10px; color: var(--tg-theme-hint-color, #999);">Ничего не найдено 🤷‍♂️</div>`;
+                         suggestionsBox.innerHTML = `<div style="padding: 10px; color: var(--tg-theme-hint-color, #999);">${i18n[userLang].api_empty}</div>`;
                     }
                 } catch (error) {
                     console.error("Ошибка API:", error);
