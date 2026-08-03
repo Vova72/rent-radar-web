@@ -192,8 +192,13 @@
             }
         };
 
-        // Определяем язык телефона (если не нашли - ставим английский)
-        let userLang = (tg.initDataUnsafe?.user?.language_code || 'en').substring(0, 2);
+        // 1. Сначала ищем язык в ссылке от бота (?lang=uk)
+        const urlParams = new URLSearchParams(window.location.search);
+        
+        // 2. Берем язык из URL, если его там нет - просим у Телеграма, если и там нет - ставим 'en'
+        let rawLang = urlParams.get('lang') || tg.initDataUnsafe?.user?.language_code || 'en';
+        
+        let userLang = rawLang.substring(0, 2).toLowerCase();
         if (!['ru', 'uk', 'en', 'de'].includes(userLang)) userLang = 'en';
 
         // Применяем переводы
