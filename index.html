@@ -254,7 +254,36 @@
         let debounceTimer;
 
         async function searchLocation() {
-            const query = document.getElementById('location_input').value;
+            let selectedLocations = [];
+        let debounceTimer; // Таймер для API
+        
+        // Наша быстрая база
+        const AUSTRIAN_LOCATIONS = [
+            "Wien (Вся Вена)",
+            "1010 Wien (Innere Stadt)", "1020 Wien (Leopoldstadt)", "1030 Wien (Landstraße)",
+            "1040 Wien (Wieden)", "1050 Wien (Margareten)", "1060 Wien (Mariahilf)",
+            "1070 Wien (Neubau)", "1080 Wien (Josefstadt)", "1090 Wien (Alsergrund)",
+            "1100 Wien (Favoriten)", "1110 Wien (Simmering)", "1120 Wien (Meidling)",
+            "1130 Wien (Hietzing)", "1140 Wien (Penzing)", "1150 Wien (Rudolfsheim-Fünfhaus)",
+            "1160 Wien (Ottakring)", "1170 Wien (Hernals)", "1180 Wien (Währing)",
+            "1190 Wien (Döbling)", "1200 Wien (Brigittenau)", "1210 Wien (Floridsdorf)",
+            "1220 Wien (Donaustadt)", "1230 Wien (Liesing)",
+            "Graz", "Linz", "Salzburg", "Innsbruck", "Klagenfurt", "Villach", 
+            "Wels", "St. Pölten", "Dornbirn", "Wiener Neustadt"
+        ];
+
+        function addLocation(locName) {
+            const cleanLoc = locName.trim();
+            if (cleanLoc.length > 0 && !selectedLocations.includes(cleanLoc)) {
+                selectedLocations.push(cleanLoc);
+                renderSelectedLocations();
+            }
+            document.getElementById('location_input').value = '';
+            document.getElementById('suggestions').style.display = 'none';
+        }
+
+        async function searchLocation() {
+            const query = document.getElementById('location_input').value.trim();
             const suggestionsBox = document.getElementById('suggestions');
             
             if (query.length < 2) {
@@ -262,45 +291,76 @@
                 return;
             }
 
-            clearTimeout(debounceTimer);
+            const queryLower = query.toLowerCase();
+            suggestionsBox.innerHTML = ''; 
+            suggestionsBox.style.display = 'block';
+            
+            // 1. БЫСТРЫЙ ЛОКАЛЬНЫЙ ПОИСК
+            const filtered = AUSTRIAN_LOCATIONS.filter(loc => loc.toLowerCase().includes(queryLower));
+            let localCount = 0;
+            
+            filtered.forEach(loc => {
+                localCount++;
+                const div = document.createElement('div');
+                div.style.padding = '10px';
+                div.style.borderBottom = '1px solid #eee';
+                div.style.cursor = 'pointer';
+                div.innerText = loc;
+                
+                div.onclick = () => {
+                    const dbValue = loc.split(' (')[0]; 
+                    addLocation(dbValue);
+                };
+                suggestionsBox.appendChild(div);
+            });
 
+            // 2. ПОДКЛЮЧАЕМ API, ЕСЛИ ЮЗЕР ИЩЕТ РЕДКИЙ ГОРОД
+            clearTimeout(debounceTimer);
+            
             debounceTimer = setTimeout(async () => {
-                const url = `https://nominatim.openstreetmap.org/search?countrycodes=at&format=json&addressdetails=1&accept-language=de&q=${encodeURIComponent(query)}`;
+                const loaderId = 'api_loader';
+                
+                // Если локальная база ничего не нашла, показываем текст загрузки
+                if (localCount === 0) {
+                    suggestionsBox.innerHTML = `<div id="${loaderId}" style="padding: 10px; color: var(--tg-theme-hint-color, #999);">Ищем по всей Австрии... ⏳</div>`;
+                }
+
                 try {
+                    const url = `https://nominatim.openstreetmap.org/search?countrycodes=at&format=json&addressdetails=1&accept-language=de&q=${encodeURIComponent(query)}`;
                     const response = await fetch(url, { headers: { "Accept-Language": "de-AT,de;q=0.9" } });
                     const data = await response.json();
-                    suggestionsBox.innerHTML = ''; 
                     
+                    const loader = document.getElementById(loaderId);
+                    if (loader) loader.remove();
+
                     if (data.length > 0) {
-                        suggestionsBox.style.display = 'block';
                         data.forEach(place => {
                             const city = place.address.city || place.address.town || place.address.village || place.name;
                             const postcode = place.address.postcode || "";
                             const displayName = postcode ? `${postcode} ${city}` : city;
 
-                            const div = document.createElement('div');
-                            div.style.padding = '10px';
-                            div.style.borderBottom = '1px solid #eee';
-                            div.style.cursor = 'pointer';
-                            div.innerText = displayName;
+                            // Добавляем город из API, только если его еще нет в нашем локальном списке
+                            const alreadyInLocal = AUSTRIAN_LOCATIONS.some(local => local.toLowerCase().includes(displayName.toLowerCase()));
                             
-                            div.onclick = () => {
-                                if (!selectedLocations.includes(displayName)) {
-                                    selectedLocations.push(displayName);
-                                    renderSelectedLocations();
-                                }
-                                document.getElementById('location_input').value = '';
-                                suggestionsBox.style.display = 'none';
-                            };
-                            suggestionsBox.appendChild(div);
+                            if (!alreadyInLocal) {
+                                const div = document.createElement('div');
+                                div.style.padding = '10px';
+                                div.style.borderBottom = '1px solid #eee';
+                                div.style.cursor = 'pointer';
+                                div.innerText = displayName;
+                                
+                                div.onclick = () => addLocation(displayName);
+                                suggestionsBox.appendChild(div);
+                            }
                         });
-                    } else {
-                        suggestionsBox.style.display = 'none';
+                    } else if (localCount === 0) {
+                         suggestionsBox.innerHTML = `<div style="padding: 10px; color: var(--tg-theme-hint-color, #999);">Ничего не найдено 🤷‍♂️</div>`;
                     }
                 } catch (error) {
                     console.error("Ошибка API:", error);
                 }
-            }, 500); 
+            }, 500); // Задержка в 500мс, чтобы API не дергалось на каждую букву
+        } 
         }
 
         function renderSelectedLocations() {
