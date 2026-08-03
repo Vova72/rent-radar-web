@@ -97,15 +97,20 @@
     </style>
 </head>
 <body>
-
     <div class="section">
-        <h3>Что ищем?</h3>
-        <label class="checkbox-label"><input type="checkbox" id="mode_apt" value="apartment" checked> Квартиры</label>
-        <label class="checkbox-label"><input type="checkbox" id="mode_wg" value="wg_zimmer"> Комнаты (WG)</label>
+        <h3 id="t_mode">Что ищем?</h3>
+        <label class="checkbox-label">
+            <input type="checkbox" id="mode_apt" value="apartment" checked> 
+            <span id="t_apt">Квартиры</span>
+        </label>
+        <label class="checkbox-label">
+            <input type="checkbox" id="mode_wg" value="wg_zimmer"> 
+            <span id="t_wg">Комнаты (WG)</span>
+        </label>
     </div>
 
     <div class="section">
-        <h3>Города или Индексы</h3>
+        <h3 id="t_loc">Города или Индексы</h3>
         <div style="position: relative;">
             <input type="text" id="location_input" placeholder="Начни вводить (например: Wien или 1090)..." autocomplete="off" oninput="searchLocation()">
             <div id="suggestions" style="display: none; position: absolute; width: 100%; background: var(--tg-theme-bg-color, #fff); border: 1px solid var(--tg-theme-hint-color, #ccc); max-height: 150px; overflow-y: auto; z-index: 100; box-shadow: 0px 4px 6px rgba(0,0,0,0.1);"></div>
@@ -114,7 +119,7 @@
     </div>
 
     <div class="section">
-        <h3>Цена</h3>
+        <h3 id="t_price">Цена</h3>
         <div class="slider-header">
             <span id="price_display_min">€0</span>
             <span id="price_display_max">€3000+</span>
@@ -128,7 +133,7 @@
     </div>
     
     <div class="section">
-        <h3>Площадь</h3>
+        <h3 id="t_sq">Площадь</h3>
         <div class="slider-header">
             <span id="sq_display_min">0 м²</span>
             <span id="sq_display_max">150+ м²</span>
@@ -142,7 +147,7 @@
     </div>
 
     <div class="section">
-        <h3>Комнаты</h3>
+        <h3 id="t_rooms">Комнаты</h3>
         <div class="slider-header">
             <span id="rooms_display_min">1</span>
             <span id="rooms_display_max">6+</span>
