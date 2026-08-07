@@ -1,0 +1,769 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Rent Radar</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+/* Всё оформление берётся из темы Telegram: у человека может быть тёмная,
+   светлая или одна из цветных. Хардкод цвета — это гарантированно белая
+   плашка на чёрном фоне у части пользователей. Фолбэки только на случай
+   открытия страницы вне Telegram. */
+:root {
+  --bg:        var(--tg-theme-bg-color, #ffffff);
+  --card:      var(--tg-theme-secondary-bg-color, #f2f2f7);
+  --text:      var(--tg-theme-text-color, #000000);
+  --hint:      var(--tg-theme-hint-color, #8e8e93);
+  --accent:    var(--tg-theme-button-color, #3390ec);
+  --on-accent: var(--tg-theme-button-text-color, #ffffff);
+  --link:      var(--tg-theme-link-color, #3390ec);
+  --radius: 12px;
+}
+
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  margin: 0;
+  padding: 12px 14px 96px;
+  font-size: 15px;
+  line-height: 1.4;
+}
+
+.card {
+  background: var(--card);
+  border-radius: var(--radius);
+  padding: 14px;
+  margin-bottom: 12px;
+}
+
+.card h2 {
+  margin: 0 0 12px;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: var(--hint);
+}
+
+.hint { font-size: 12px; color: var(--hint); margin: 8px 0 0; }
+
+/* ---------- Чипы: районы, города, выбранное ---------- */
+
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+  gap: 6px;
+}
+
+.chip {
+  border: 1px solid transparent;
+  background: var(--bg);
+  color: var(--text);
+  border-radius: 10px;
+  padding: 8px 10px;
+  font-size: 14px;
+  cursor: pointer;
+  text-align: left;
+  font-family: inherit;
+  overflow: hidden;
+  transition: background .12s, color .12s;
+}
+.chip b { display: block; font-size: 14px; font-weight: 600; }
+.chip small {
+  display: block;
+  font-size: 10px;
+  color: var(--hint);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.chip.on { background: var(--accent); color: var(--on-accent); }
+.chip.on small { color: var(--on-accent); opacity: .8; }
+
+.chip.wide { grid-column: 1 / -1; text-align: center; }
+.chip.wide b { font-size: 14px; }
+
+.tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--accent);
+  color: var(--on-accent);
+  border: none;
+  border-radius: 14px;
+  padding: 6px 10px;
+  font-size: 13px;
+  font-family: inherit;
+  cursor: pointer;
+}
+.tag span { font-size: 15px; line-height: 1; opacity: .75; }
+
+/* ---------- Поиск по адресу ---------- */
+
+.search { position: relative; }
+
+input[type="search"] {
+  width: 100%;
+  padding: 11px 12px;
+  border: none;
+  border-radius: 10px;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 16px;      /* меньше 16px — iOS зумит страницу при фокусе */
+  font-family: inherit;
+  outline: none;
+  -webkit-appearance: none;
+}
+input[type="search"]::-webkit-search-cancel-button { -webkit-appearance: none; }
+
+#found {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  max-height: 210px;
+  overflow-y: auto;
+  background: var(--bg);
+  border-radius: 10px;
+  box-shadow: 0 6px 24px rgba(0,0,0,.28);
+  display: none;
+}
+#found button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: none;
+  color: var(--text);
+  font: inherit;
+  padding: 11px 12px;
+  cursor: pointer;
+}
+#found button + button { border-top: 1px solid var(--card); }
+#found .msg { padding: 11px 12px; color: var(--hint); font-size: 13px; }
+
+/* ---------- Ползунки ---------- */
+
+.range + .range { margin-top: 22px; }
+
+.range-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 14px;
+}
+.range-top .name { font-size: 14px; color: var(--hint); }
+.range-top .value { font-size: 15px; font-weight: 600; }
+
+.slider { position: relative; height: 24px; }
+.slider .rail,
+.slider .fill {
+  position: absolute;
+  height: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  border-radius: 2px;
+}
+.slider .rail { left: 0; right: 0; background: var(--hint); opacity: .35; }
+.slider .fill { background: var(--accent); }
+
+.slider input {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  top: 0;
+  left: 0;
+  margin: 0;
+  background: none;
+  pointer-events: none;   /* клики проходят насквозь, ловят только «кружки» */
+  -webkit-appearance: none;
+  appearance: none;
+}
+.slider input::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 3px solid #fff;
+  box-shadow: 0 1px 4px rgba(0,0,0,.35);
+  pointer-events: auto;
+  cursor: pointer;
+}
+.slider input::-moz-range-thumb {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 3px solid #fff;
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+/* ---------- Переключатель ---------- */
+
+.switch {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+}
+.switch .body { flex: 1; }
+.switch .title { font-size: 15px; }
+.switch .sub { font-size: 12px; color: var(--hint); margin-top: 2px; }
+.switch input { display: none; }
+.switch .track {
+  flex: 0 0 auto;
+  width: 46px;
+  height: 28px;
+  border-radius: 14px;
+  background: var(--hint);
+  opacity: .45;
+  position: relative;
+  transition: background .15s, opacity .15s;
+}
+.switch input:checked + .track { background: var(--accent); opacity: 1; }
+.switch .track::after {
+  content: '';
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #fff;
+  transition: transform .15s;
+}
+.switch input:checked + .track::after { transform: translateX(18px); }
+
+/* Метка стенда. Один и тот же файл лежит и в корне (прод), и в /dev/;
+   он сам смотрит, откуда его открыли, и показывает плашку только на деве.
+   Так «выкатить в прод» — это буквально копирование файла без правок,
+   а не редактирование с риском забыть убрать отладочный флаг. */
+#stand {
+  display: none;
+  position: fixed;
+  top: 0;
+  right: 0;
+  z-index: 100;
+  padding: 3px 10px;
+  border-bottom-left-radius: 8px;
+  background: #e8a33d;
+  color: #000;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .08em;
+}
+
+/* Вне Telegram MainButton не существует — без этой кнопки страницу
+   невозможно даже проверить в обычном браузере. */
+#fallback-save {
+  display: none;
+  width: 100%;
+  padding: 14px;
+  border: none;
+  border-radius: 10px;
+  background: var(--accent);
+  color: var(--on-accent);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+</style>
+</head>
+<body>
+
+<div id="stand">DEV</div>
+
+<div class="card">
+  <h2 id="l-vienna">Вена по районам</h2>
+  <div class="grid" id="districts"></div>
+</div>
+
+<div class="card">
+  <h2 id="l-other">Другой город или адрес</h2>
+  <div class="search">
+    <input type="search" id="q" autocomplete="off" enterkeyhint="search">
+    <div id="found"></div>
+  </div>
+  <div class="chips" id="popular" style="margin-top:10px"></div>
+</div>
+
+<div class="card" id="chosen-card" style="display:none">
+  <h2 id="l-chosen">Выбрано</h2>
+  <div class="chips" id="chosen"></div>
+  <p class="hint" id="l-chosen-hint"></p>
+</div>
+
+<div class="card">
+  <h2 id="l-params">Параметры</h2>
+
+  <div class="range">
+    <div class="range-top"><span class="name" id="l-price">Цена</span><span class="value" id="v-price"></span></div>
+    <div class="slider">
+      <div class="rail"></div><div class="fill" id="f-price"></div>
+      <input type="range" id="price-min" min="0" max="3000" step="50" value="0">
+      <input type="range" id="price-max" min="0" max="3000" step="50" value="3000">
+    </div>
+  </div>
+
+  <div class="range">
+    <div class="range-top"><span class="name" id="l-sq">Площадь</span><span class="value" id="v-sq"></span></div>
+    <div class="slider">
+      <div class="rail"></div><div class="fill" id="f-sq"></div>
+      <input type="range" id="sq-min" min="0" max="150" step="5" value="0">
+      <input type="range" id="sq-max" min="0" max="150" step="5" value="150">
+    </div>
+  </div>
+
+  <div class="range">
+    <div class="range-top"><span class="name" id="l-rooms">Комнаты</span><span class="value" id="v-rooms"></span></div>
+    <div class="slider">
+      <div class="rail"></div><div class="fill" id="f-rooms"></div>
+      <input type="range" id="rooms-min" min="1" max="6" step="1" value="1">
+      <input type="range" id="rooms-max" min="1" max="6" step="1" value="6">
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <label class="switch">
+    <div class="body">
+      <div class="title" id="l-agency">Скрывать объявления агентств</div>
+      <div class="sub" id="l-agency-sub"></div>
+    </div>
+    <input type="checkbox" id="hide-agencies"><div class="track"></div>
+  </label>
+</div>
+
+<button id="fallback-save"></button>
+
+<script>
+"use strict";
+
+var tg = window.Telegram && window.Telegram.WebApp ? window.Telegram.WebApp : null;
+if (tg) { tg.ready(); tg.expand(); }
+
+/* ------------------------------------------------------------------
+   Языки
+------------------------------------------------------------------ */
+
+var I18N = {
+  ru: {
+    vienna: "Вена по районам", all_vienna: "Вся Вена", other: "Другой город или адрес",
+    search_ph: "Город, посёлок или индекс", chosen: "Выбрано",
+    chosen_hint: "Пусто = вся Австрия. Нажми на пункт, чтобы убрать.",
+    params: "Параметры", price: "Цена", sq: "Площадь", rooms: "Комнаты",
+    any: "любая", any_m: "любое", from: "от", to: "до",
+    agency: "Скрывать объявления агентств",
+    agency_sub: "Останутся частные и те, где площадка не сказала, кто сдаёт",
+    save: "СОХРАНИТЬ ФИЛЬТРЫ", searching: "Ищем по Австрии…", empty: "Ничего не нашлось",
+    offline: "Поиск по адресу сейчас недоступен"
+  },
+  uk: {
+    vienna: "Відень за районами", all_vienna: "Весь Відень", other: "Інше місто або адреса",
+    search_ph: "Місто, селище або індекс", chosen: "Обрано",
+    chosen_hint: "Порожньо = вся Австрія. Натисни на пункт, щоб прибрати.",
+    params: "Параметри", price: "Ціна", sq: "Площа", rooms: "Кімнати",
+    any: "будь-яка", any_m: "будь-яке", from: "від", to: "до",
+    agency: "Приховувати оголошення агенцій",
+    agency_sub: "Залишаться приватні й ті, де майданчик не сказав, хто здає",
+    save: "ЗБЕРЕГТИ ФІЛЬТРИ", searching: "Шукаємо по Австрії…", empty: "Нічого не знайшлось",
+    offline: "Пошук за адресою зараз недоступний"
+  },
+  en: {
+    vienna: "Vienna by district", all_vienna: "All of Vienna", other: "Other city or address",
+    search_ph: "City, town or postcode", chosen: "Selected",
+    chosen_hint: "Empty = all of Austria. Tap an item to remove it.",
+    params: "Parameters", price: "Price", sq: "Area", rooms: "Rooms",
+    any: "any", any_m: "any", from: "from", to: "up to",
+    agency: "Hide agency listings",
+    agency_sub: "Keeps private ones and those where the site did not say",
+    save: "SAVE FILTERS", searching: "Searching Austria…", empty: "Nothing found",
+    offline: "Address search is unavailable right now"
+  },
+  de: {
+    vienna: "Wien nach Bezirken", all_vienna: "Ganz Wien", other: "Andere Stadt oder Adresse",
+    search_ph: "Stadt, Ort oder PLZ", chosen: "Ausgewählt",
+    chosen_hint: "Leer = ganz Österreich. Zum Entfernen antippen.",
+    params: "Parameter", price: "Preis", sq: "Fläche", rooms: "Zimmer",
+    any: "beliebig", any_m: "beliebig", from: "ab", to: "bis",
+    agency: "Maklerinserate ausblenden",
+    agency_sub: "Privatangebote bleiben, ebenso Inserate ohne Angabe",
+    save: "FILTER SPEICHERN", searching: "Suche in Österreich…", empty: "Nichts gefunden",
+    offline: "Adresssuche ist gerade nicht verfügbar"
+  }
+};
+
+var params = new URLSearchParams(window.location.search);
+var rawLang = params.get('lang')
+  || (tg && tg.initDataUnsafe && tg.initDataUnsafe.user && tg.initDataUnsafe.user.language_code)
+  || 'en';
+var lang = String(rawLang).slice(0, 2).toLowerCase();
+if (!I18N[lang]) lang = 'en';
+var T = I18N[lang];
+
+/* ------------------------------------------------------------------
+   Данные о местах
+
+   Индекс — это то, что бот сравнивает точно (\d{4} в фильтре), поэтому
+   у районов Вены value содержит индекс. У остальных городов индекса нет:
+   их бот ищет по названию с границей слова, и подставлять сюда индекс
+   наугад было бы враньём — один город это несколько индексов.
+------------------------------------------------------------------ */
+
+var VIENNA = [
+  ["1010", "Innere Stadt"], ["1020", "Leopoldstadt"], ["1030", "Landstraße"],
+  ["1040", "Wieden"],       ["1050", "Margareten"],   ["1060", "Mariahilf"],
+  ["1070", "Neubau"],       ["1080", "Josefstadt"],   ["1090", "Alsergrund"],
+  ["1100", "Favoriten"],    ["1110", "Simmering"],    ["1120", "Meidling"],
+  ["1130", "Hietzing"],     ["1140", "Penzing"],      ["1150", "Rudolfsheim-Fünfhaus"],
+  ["1160", "Ottakring"],    ["1170", "Hernals"],      ["1180", "Währing"],
+  ["1190", "Döbling"],      ["1200", "Brigittenau"],  ["1210", "Floridsdorf"],
+  ["1220", "Donaustadt"],   ["1230", "Liesing"]
+];
+
+var CITIES = [
+  "Graz", "Linz", "Salzburg", "Innsbruck", "Klagenfurt", "Villach", "Wels",
+  "St. Pölten", "Dornbirn", "Wiener Neustadt", "Steyr", "Feldkirch", "Bregenz",
+  "Leonding", "Klosterneuburg", "Baden", "Wolfsberg", "Krems an der Donau",
+  "Traun", "Amstetten", "Lustenau", "Kapfenberg", "Mödling", "Hallein",
+  "Kufstein", "Traiskirchen", "Schwechat", "Braunau am Inn", "Stockerau",
+  "Tulln", "Hohenems", "Spittal an der Drau", "Telfs", "Ternitz",
+  "Perchtoldsdorf", "Bludenz", "Bad Ischl", "Eisenstadt", "Schwaz",
+  "Hall in Tirol", "Gmunden", "Wörgl", "Zwettl", "Leibnitz", "Korneuburg",
+  "Marchtrenk", "Rankweil", "Götzis", "Neunkirchen", "Vöcklabruck",
+  "Knittelfeld", "Gänserndorf", "Mistelbach", "Ansfelden", "Saalfelden"
+];
+
+/* Крупнейшие — отдельным рядом, чтобы до них не надо было печатать */
+var POPULAR = ["Graz", "Linz", "Salzburg", "Innsbruck", "Klagenfurt"];
+
+var ALL_VIENNA = "Wien";
+
+/* ------------------------------------------------------------------
+   Состояние
+------------------------------------------------------------------ */
+
+var chosen = [];   // массив строк ровно в том виде, в каком уедут боту
+
+function has(v) { return chosen.indexOf(v) !== -1; }
+
+function toggle(v) {
+  var i = chosen.indexOf(v);
+  if (i !== -1) { chosen.splice(i, 1); render(); return; }
+
+  // «Вся Вена» и отдельные районы вместе бессмысленны: город матчится по
+  // имени и перекрывает любые районы. Поэтому они взаимно исключающие.
+  if (v === ALL_VIENNA) {
+    chosen = chosen.filter(function (x) { return !isDistrict(x); });
+  } else if (isDistrict(v)) {
+    chosen = chosen.filter(function (x) { return x !== ALL_VIENNA; });
+  }
+  chosen.push(v);
+  render();
+}
+
+function isDistrict(v) {
+  return VIENNA.some(function (d) { return districtValue(d) === v; });
+}
+
+function districtValue(d) { return d[0] + " Wien"; }
+
+/* ------------------------------------------------------------------
+   Отрисовка
+------------------------------------------------------------------ */
+
+var $ = function (id) { return document.getElementById(id); };
+
+function button(cls, html, onclick) {
+  var b = document.createElement('button');
+  b.type = 'button';
+  b.className = cls;
+  b.innerHTML = html;
+  b.onclick = onclick;
+  return b;
+}
+
+function esc(s) {
+  return String(s).replace(/[&<>"]/g, function (c) {
+    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c];
+  });
+}
+
+function renderDistricts() {
+  var box = $('districts');
+  box.innerHTML = '';
+
+  box.appendChild(button(
+    'chip wide' + (has(ALL_VIENNA) ? ' on' : ''),
+    '<b>' + esc(T.all_vienna) + '</b>',
+    function () { toggle(ALL_VIENNA); }
+  ));
+
+  VIENNA.forEach(function (d) {
+    var v = districtValue(d);
+    box.appendChild(button(
+      'chip' + (has(v) ? ' on' : ''),
+      '<b>' + d[0] + '</b><small>' + esc(d[1]) + '</small>',
+      function () { toggle(v); }
+    ));
+  });
+}
+
+function renderPopular() {
+  var box = $('popular');
+  box.innerHTML = '';
+  POPULAR.forEach(function (city) {
+    box.appendChild(button(
+      'chip' + (has(city) ? ' on' : ''),
+      '<b>' + esc(city) + '</b>',
+      function () { toggle(city); }
+    ));
+  });
+}
+
+function renderChosen() {
+  var box = $('chosen');
+  box.innerHTML = '';
+  $('chosen-card').style.display = chosen.length ? '' : 'none';
+  chosen.forEach(function (v) {
+    box.appendChild(button('tag', esc(label(v)) + '<span>&times;</span>',
+      function () { toggle(v); }));
+  });
+}
+
+function label(v) {
+  var d = VIENNA.filter(function (x) { return districtValue(x) === v; })[0];
+  return d ? d[0] + " " + d[1] : v;
+}
+
+function render() {
+  renderDistricts();
+  renderPopular();
+  renderChosen();
+}
+
+/* ------------------------------------------------------------------
+   Ползунки
+
+   Главное здесь — потолок означает «без ограничения» и уезжает боту как
+   null, а не как своё числовое значение. Иначе фильтр «до 150 м²»,
+   который человек никогда не двигал, молча отсекает всё, что больше:
+   в боевой базе на этом потолке стояло 11 фильтров из 21, и их владельцы
+   просто не видели больших квартир.
+------------------------------------------------------------------ */
+
+function setupRange(id, fmt) {
+  var lo = $(id + '-min'), hi = $(id + '-max'), fill = $('f-' + id), out = $('v-' + id);
+
+  function paint(e) {
+    var a = +lo.value, b = +hi.value;
+    if (a > b) {
+      if (e && e.target === lo) { lo.value = b; a = b; } else { hi.value = a; b = a; }
+    }
+    var span = +lo.max - +lo.min;
+    fill.style.left  = ((a - +lo.min) / span * 100) + '%';
+    fill.style.right = (100 - (b - +hi.min) / span * 100) + '%';
+    out.textContent = fmt(a, b, a === +lo.min, b === +hi.max);
+  }
+
+  lo.addEventListener('input', paint);
+  hi.addEventListener('input', paint);
+  return paint;
+}
+
+function bound(id) {
+  var lo = $(id + '-min'), hi = $(id + '-max');
+  return {
+    min: +lo.value === +lo.min ? null : +lo.value,
+    max: +hi.value === +hi.max ? null : +hi.value
+  };
+}
+
+var paintPrice = setupRange('price', function (a, b, floor, ceil) {
+  if (floor && ceil) return T.any;
+  if (floor) return T.to + ' ' + b + ' €';
+  if (ceil)  return T.from + ' ' + a + ' €';
+  return a + ' – ' + b + ' €';
+});
+
+var paintSq = setupRange('sq', function (a, b, floor, ceil) {
+  if (floor && ceil) return T.any_m;
+  if (floor) return T.to + ' ' + b + ' m²';
+  if (ceil)  return T.from + ' ' + a + ' m²';
+  return a + ' – ' + b + ' m²';
+});
+
+var paintRooms = setupRange('rooms', function (a, b, floor, ceil) {
+  if (floor && ceil) return T.any_m;
+  if (floor) return T.to + ' ' + b;
+  if (ceil)  return T.from + ' ' + a;
+  return a === b ? String(a) : a + ' – ' + b;
+});
+
+/* ------------------------------------------------------------------
+   Поиск по адресу
+
+   Сначала свой список — он мгновенный и работает без сети. Nominatim
+   подключается только если своего совпадения не нашлось: это чужой
+   бесплатный сервис, и дёргать его на каждую букву некрасиво и медленно.
+------------------------------------------------------------------ */
+
+var searchTimer = null;
+
+function localMatches(q) {
+  var out = [];
+  VIENNA.forEach(function (d) {
+    if ((d[0] + ' ' + d[1]).toLowerCase().indexOf(q) !== -1) {
+      out.push({ label: d[0] + ' ' + d[1], value: districtValue(d) });
+    }
+  });
+  CITIES.forEach(function (c) {
+    if (c.toLowerCase().indexOf(q) !== -1) out.push({ label: c, value: c });
+  });
+  return out;
+}
+
+function showResults(items, message) {
+  var box = $('found');
+  box.innerHTML = '';
+  items.forEach(function (it) {
+    box.appendChild(button('', esc(it.label), function () {
+      if (!has(it.value)) toggle(it.value);
+      $('q').value = '';
+      box.style.display = 'none';
+    }));
+  });
+  if (message) {
+    var div = document.createElement('div');
+    div.className = 'msg';
+    div.textContent = message;
+    box.appendChild(div);
+  }
+  box.style.display = (items.length || message) ? 'block' : 'none';
+}
+
+$('q').addEventListener('input', function () {
+  var q = $('q').value.trim().toLowerCase();
+  clearTimeout(searchTimer);
+
+  if (q.length < 2) { $('found').style.display = 'none'; return; }
+
+  var local = localMatches(q);
+  showResults(local, local.length ? null : T.searching);
+  if (local.length) return;
+
+  searchTimer = setTimeout(function () { remoteSearch(q); }, 450);
+});
+
+function remoteSearch(q) {
+  var url = 'https://nominatim.openstreetmap.org/search'
+    + '?countrycodes=at&format=json&addressdetails=1&limit=8&accept-language=de&q='
+    + encodeURIComponent(q);
+
+  fetch(url)
+    .then(function (r) { return r.json(); })
+    .then(function (data) {
+      if ($('q').value.trim().toLowerCase() !== q) return;   // человек уже допечатал
+      var items = [];
+      (data || []).forEach(function (p) {
+        var a = p.address || {};
+        var city = a.city || a.town || a.village || a.municipality || p.name;
+        if (!city) return;
+        // Боту уезжает индекс, если он есть: его он сравнивает точно.
+        // Название города — запасной вариант, оно матчится по границе слова.
+        var value = a.postcode || city;
+        var text = a.postcode ? a.postcode + ' ' + city : city;
+        if (items.some(function (i) { return i.value === value; })) return;
+        items.push({ label: text, value: value });
+      });
+      showResults(items, items.length ? null : T.empty);
+    })
+    .catch(function () { showResults([], T.offline); });
+}
+
+document.addEventListener('click', function (e) {
+  if (!e.target.closest('.search')) $('found').style.display = 'none';
+});
+
+/* ------------------------------------------------------------------
+   Восстановление фильтров, присланных ботом
+------------------------------------------------------------------ */
+
+function restore(id, name, fallbackToBound) {
+  var el = $(id);
+  var v = params.get(name);
+  el.value = (v !== null && v !== '') ? v : fallbackToBound;
+}
+
+(function init() {
+  // Стенд определяется по пути, а не по флагу в коде: /dev/ — дев, корень — прод
+  if (/\/dev\/?$|\/dev\//.test(window.location.pathname)) {
+    $('stand').style.display = 'block';
+  }
+
+  // Подписи
+  $('l-vienna').textContent = T.vienna;
+  $('l-other').textContent = T.other;
+  $('l-chosen').textContent = T.chosen;
+  $('l-chosen-hint').textContent = T.chosen_hint;
+  $('l-params').textContent = T.params;
+  $('l-price').textContent = T.price;
+  $('l-sq').textContent = T.sq;
+  $('l-rooms').textContent = T.rooms;
+  $('l-agency').textContent = T.agency;
+  $('l-agency-sub').textContent = T.agency_sub;
+  $('q').placeholder = T.search_ph;
+  $('fallback-save').textContent = T.save;
+
+  var cities = params.get('cities');
+  if (cities) {
+    cities.split(',').forEach(function (c) {
+      var v = c.trim();
+      if (v && !has(v)) chosen.push(v);
+    });
+  }
+
+  restore('price-min', 'min_price', 0);
+  restore('price-max', 'max_price', 3000);
+  restore('sq-min',    'min_sq',    0);
+  restore('sq-max',    'max_sq',    150);
+  restore('rooms-min', 'min_rooms', 1);
+  restore('rooms-max', 'max_rooms', 6);
+  $('hide-agencies').checked = params.get('hide_agencies') === '1';
+
+  render();
+  paintPrice(); paintSq(); paintRooms();
+
+  if (tg) {
+    tg.MainButton.setText(T.save);
+    tg.MainButton.show();
+    tg.MainButton.onClick(save);
+  } else {
+    $('fallback-save').style.display = 'block';
+    $('fallback-save').onclick = save;
+  }
+})();
+
+function save() {
+  var data = {
+    locations: chosen,
+    price: bound('price'),
+    square_meters: bound('sq'),
+    rooms: bound('rooms'),
+    hide_agencies: $('hide-agencies').checked
+  };
+  if (tg) tg.sendData(JSON.stringify(data));
+  else console.log(JSON.stringify(data, null, 2));
+}
+</script>
+</body>
+</html>
