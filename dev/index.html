@@ -142,6 +142,21 @@ details summary b {
 }
 details .grid { margin-top: 8px; }
 
+/* Переключатель города внутри блока районов. Появляется только когда
+   выбрано больше одного города: при одном он был бы кнопкой без выбора. */
+.tabs { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.tabs button {
+  border: none;
+  background: var(--bg);
+  color: var(--hint);
+  border-radius: 8px;
+  padding: 6px 10px;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+.tabs button.on { background: var(--accent); color: var(--on-accent); }
+
 /* ---------- Поиск по адресу ---------- */
 
 .search { position: relative; }
@@ -328,9 +343,11 @@ input[type="search"]::-webkit-search-cancel-button { -webkit-appearance: none; }
   </div>
   <div class="chips" id="popular"></div>
 
-  <details id="vienna">
-    <summary><span id="l-districts">Районы Вены</span><b id="districts-count"></b></summary>
+  <details id="areas">
+    <summary><span id="l-districts"></span><b id="districts-count"></b></summary>
+    <div class="tabs" id="city-tabs"></div>
     <div class="grid" id="districts"></div>
+    <p class="hint" id="no-districts"></p>
   </details>
 </div>
 
@@ -395,7 +412,7 @@ if (tg) { tg.ready(); tg.expand(); }
 
 var I18N = {
   ru: {
-    where: "Где ищем", districts: "Районы Вены",
+    where: "Где ищем", districts_of: "Районы: {city}", no_districts: "Районы {city} пока не заведены — добавь индекс через поиск выше.",
     search_ph: "Город, посёлок или индекс", chosen: "Выбрано",
     chosen_hint: "Пусто = вся Австрия. Нажми на пункт, чтобы убрать.",
     params: "Параметры", price: "Цена", sq: "Площадь", rooms: "Комнаты",
@@ -406,7 +423,7 @@ var I18N = {
     offline: "Поиск по адресу сейчас недоступен"
   },
   uk: {
-    where: "Де шукаємо", districts: "Райони Відня",
+    where: "Де шукаємо", districts_of: "Райони: {city}", no_districts: "Райони {city} ще не заведені — додай індекс через пошук вище.",
     search_ph: "Місто, селище або індекс", chosen: "Обрано",
     chosen_hint: "Порожньо = вся Австрія. Натисни на пункт, щоб прибрати.",
     params: "Параметри", price: "Ціна", sq: "Площа", rooms: "Кімнати",
@@ -417,7 +434,7 @@ var I18N = {
     offline: "Пошук за адресою зараз недоступний"
   },
   en: {
-    where: "Where to search", districts: "Vienna districts",
+    where: "Where to search", districts_of: "{city} districts", no_districts: "No district list for {city} yet — add a postcode via the search above.",
     search_ph: "City, town or postcode", chosen: "Selected",
     chosen_hint: "Empty = all of Austria. Tap an item to remove it.",
     params: "Parameters", price: "Price", sq: "Area", rooms: "Rooms",
@@ -428,7 +445,7 @@ var I18N = {
     offline: "Address search is unavailable right now"
   },
   de: {
-    where: "Wo suchen", districts: "Wiener Bezirke",
+    where: "Wo suchen", districts_of: "Bezirke: {city}", no_districts: "Für {city} gibt es noch keine Bezirksliste — PLZ oben suchen.",
     search_ph: "Stadt, Ort oder PLZ", chosen: "Ausgewählt",
     chosen_hint: "Leer = ganz Österreich. Zum Entfernen antippen.",
     params: "Parameter", price: "Preis", sq: "Fläche", rooms: "Zimmer",
@@ -457,16 +474,22 @@ var T = I18N[lang];
    наугад было бы враньём — один город это несколько индексов.
 ------------------------------------------------------------------ */
 
-var VIENNA = [
-  ["1010", "Innere Stadt"], ["1020", "Leopoldstadt"], ["1030", "Landstraße"],
-  ["1040", "Wieden"],       ["1050", "Margareten"],   ["1060", "Mariahilf"],
-  ["1070", "Neubau"],       ["1080", "Josefstadt"],   ["1090", "Alsergrund"],
-  ["1100", "Favoriten"],    ["1110", "Simmering"],    ["1120", "Meidling"],
-  ["1130", "Hietzing"],     ["1140", "Penzing"],      ["1150", "Rudolfsheim-Fünfhaus"],
-  ["1160", "Ottakring"],    ["1170", "Hernals"],      ["1180", "Währing"],
-  ["1190", "Döbling"],      ["1200", "Brigittenau"],  ["1210", "Floridsdorf"],
-  ["1220", "Donaustadt"],   ["1230", "Liesing"]
-];
+var DISTRICTS = {
+  "Wien": [
+    ["1010", "Innere Stadt"], ["1020", "Leopoldstadt"], ["1030", "Landstraße"],
+    ["1040", "Wieden"],       ["1050", "Margareten"],   ["1060", "Mariahilf"],
+    ["1070", "Neubau"],       ["1080", "Josefstadt"],   ["1090", "Alsergrund"],
+    ["1100", "Favoriten"],    ["1110", "Simmering"],    ["1120", "Meidling"],
+    ["1130", "Hietzing"],     ["1140", "Penzing"],      ["1150", "Rudolfsheim-Fünfhaus"],
+    ["1160", "Ottakring"],    ["1170", "Hernals"],      ["1180", "Währing"],
+    ["1190", "Döbling"],      ["1200", "Brigittenau"],  ["1210", "Floridsdorf"],
+    ["1220", "Donaustadt"],   ["1230", "Liesing"]
+  ]
+  // Грац, Линц, Зальцбург и прочие появятся здесь, когда будет ПРОВЕРЕННЫЙ
+  // список индексов: их собирает scripts/fetch_city_postcodes.py на сервере.
+  // Вписывать по памяти нельзя — бот сравнивает индекс точно, и один
+  // выдуманный индекс = фильтр, который молча не находит ничего.
+};
 
 var CITIES = [
   "Graz", "Linz", "Salzburg", "Innsbruck", "Klagenfurt", "Villach", "Wels",
@@ -492,30 +515,70 @@ var ALL_VIENNA = "Wien";
    Состояние
 ------------------------------------------------------------------ */
 
-var chosen = [];   // массив строк ровно в том виде, в каком уедут боту
+var chosen = [];      // массив строк ровно в том виде, в каком уедут боту
+var activeCity = ALL_VIENNA;   // чьи районы сейчас показаны в блоке
 
 function has(v) { return chosen.indexOf(v) !== -1; }
+
+function districtValue(city, d) { return d[0] + " " + city; }
+
+/* Все значения-районы всех городов сразу: нужно, чтобы отличить «выбран
+   город» от «выбран район города» в одном плоском списке chosen. */
+var DISTRICT_VALUES = (function () {
+  var set = {};
+  Object.keys(DISTRICTS).forEach(function (city) {
+    DISTRICTS[city].forEach(function (d) { set[districtValue(city, d)] = city; });
+  });
+  return set;
+})();
+
+function isDistrict(v) { return Object.prototype.hasOwnProperty.call(DISTRICT_VALUES, v); }
+function cityOfDistrict(v) { return DISTRICT_VALUES[v]; }
+
+/*
+ * Города, между которыми есть смысл переключаться в блоке районов.
+ *
+ * Это НЕ «выбранные города»: выбрав «1090 Wien», человек снимает с выбора
+ * «Wien» целиком (город перекрывает свои районы), но Вена от этого не
+ * перестаёт быть местом, где он ищет. Если считать только выбранные города,
+ * вкладка «Wien» исчезала бы ровно в момент клика по первому району — прямо
+ * под пальцем, вместе с сеткой, в которую он целился дальше.
+ */
+function tabCities() {
+  var out = [];
+  chosen.forEach(function (v) {
+    var city = isDistrict(v) ? cityOfDistrict(v) : v;
+    if (out.indexOf(city) === -1) out.push(city);
+  });
+  // Города, у которых район выбрать вообще можно, доступны всегда — иначе,
+  // выбрав Грац, человек терял бы дорогу обратно к районам Вены.
+  Object.keys(DISTRICTS).forEach(function (city) {
+    if (out.indexOf(city) === -1) out.push(city);
+  });
+  if (out.indexOf(activeCity) === -1) out.push(activeCity);
+  return out;
+}
 
 function toggle(v) {
   var i = chosen.indexOf(v);
   if (i !== -1) { chosen.splice(i, 1); render(); return; }
 
-  // «Вся Вена» и отдельные районы вместе бессмысленны: город матчится по
-  // имени и перекрывает любые районы. Поэтому они взаимно исключающие.
-  if (v === ALL_VIENNA) {
-    chosen = chosen.filter(function (x) { return !isDistrict(x); });
-  } else if (isDistrict(v)) {
-    chosen = chosen.filter(function (x) { return x !== ALL_VIENNA; });
+  // Город и его районы вместе бессмысленны: город матчится по имени и
+  // перекрывает любые свои районы. Взаимоисключение — только внутри одного
+  // города: выбрать «Graz» и «1090 Wien» одновременно совершенно законно.
+  if (isDistrict(v)) {
+    var city = cityOfDistrict(v);
+    chosen = chosen.filter(function (x) { return x !== city; });
+    activeCity = city;
+  } else if (DISTRICTS[v]) {
+    chosen = chosen.filter(function (x) { return cityOfDistrict(x) !== v; });
+    activeCity = v;
+  } else {
+    activeCity = v;
   }
   chosen.push(v);
   render();
 }
-
-function isDistrict(v) {
-  return VIENNA.some(function (d) { return districtValue(d) === v; });
-}
-
-function districtValue(d) { return d[0] + " Wien"; }
 
 /* ------------------------------------------------------------------
    Отрисовка
@@ -538,16 +601,39 @@ function esc(s) {
   });
 }
 
-function renderDistricts() {
-  var box = $('districts');
+function renderTabs() {
+  var box = $('city-tabs');
+  var cities = tabCities();
   box.innerHTML = '';
 
-  var picked = 0;
-  VIENNA.forEach(function (d) { if (has(districtValue(d))) picked++; });
+  // При одном выбранном городе вкладка была бы кнопкой без выбора —
+  // название и так стоит в заголовке блока.
+  if (cities.length < 2) return;
+
+  cities.forEach(function (city) {
+    box.appendChild(button(city === activeCity ? 'on' : '', esc(city), function () {
+      activeCity = city;
+      render();
+    }));
+  });
+}
+
+function renderDistricts() {
+  var box = $('districts');
+  var list = DISTRICTS[activeCity] || null;
+
+  $('l-districts').textContent = T.districts_of.replace('{city}', activeCity);
+
+  box.innerHTML = '';
+  $('no-districts').textContent = list ? '' : T.no_districts.replace('{city}', activeCity);
+
+  var picked = chosen.filter(function (v) { return cityOfDistrict(v) === activeCity; }).length;
   $('districts-count').textContent = picked ? String(picked) : '';
 
-  VIENNA.forEach(function (d) {
-    var v = districtValue(d);
+  if (!list) return;
+
+  list.forEach(function (d) {
+    var v = districtValue(activeCity, d);
     box.appendChild(button(
       'chip' + (has(v) ? ' on' : ''),
       '<b>' + d[0] + '</b><small>' + esc(d[1]) + '</small>',
@@ -579,11 +665,20 @@ function renderChosen() {
 }
 
 function label(v) {
-  var d = VIENNA.filter(function (x) { return districtValue(x) === v; })[0];
+  var city = cityOfDistrict(v);
+  if (!city) return v;
+  var code = v.split(' ')[0];
+  var d = DISTRICTS[city].filter(function (x) { return x[0] === code; })[0];
   return d ? d[0] + " " + d[1] : v;
 }
 
 function render() {
+  // Активный город мог исчезнуть из выбора — тогда показываем первый
+  // оставшийся, а если не осталось ни одного, возвращаемся к Вене.
+  var cities = tabCities();
+  if (cities.indexOf(activeCity) === -1) activeCity = cities[0] || ALL_VIENNA;
+
+  renderTabs();
   renderDistricts();
   renderPopular();
   renderChosen();
@@ -659,10 +754,12 @@ var searchTimer = null;
 
 function localMatches(q) {
   var out = [];
-  VIENNA.forEach(function (d) {
-    if ((d[0] + ' ' + d[1]).toLowerCase().indexOf(q) !== -1) {
-      out.push({ label: d[0] + ' ' + d[1], value: districtValue(d) });
-    }
+  Object.keys(DISTRICTS).forEach(function (city) {
+    DISTRICTS[city].forEach(function (d) {
+      if ((d[0] + ' ' + d[1] + ' ' + city).toLowerCase().indexOf(q) !== -1) {
+        out.push({ label: d[0] + ' ' + d[1] + ' (' + city + ')', value: districtValue(city, d) });
+      }
+    });
   });
   CITIES.forEach(function (c) {
     if (c.toLowerCase().indexOf(q) !== -1) out.push({ label: c, value: c });
@@ -676,7 +773,7 @@ function showResults(items, message) {
   items.forEach(function (it) {
     box.appendChild(button('', esc(it.label), function () {
       if (!has(it.value)) toggle(it.value);
-      if (isDistrict(it.value)) $('vienna').open = true;
+      if (isDistrict(it.value)) $('areas').open = true;
       $('q').value = '';
       box.style.display = 'none';
     }));
@@ -751,7 +848,6 @@ function restore(id, name, fallbackToBound) {
 
   // Подписи
   $('l-where').textContent = T.where;
-  $('l-districts').textContent = T.districts;
   $('l-chosen').textContent = T.chosen;
   $('l-chosen-hint').textContent = T.chosen_hint;
   $('l-params').textContent = T.params;
@@ -784,7 +880,7 @@ function restore(id, name, fallbackToBound) {
 
   // Раскрываем районы сразу, если человек их уже выбирал: иначе он открывает
   // фильтры и не видит собственного выбора — выглядит как потеря настроек.
-  if (chosen.some(isDistrict)) $('vienna').open = true;
+  if (chosen.some(isDistrict)) $('areas').open = true;
 
   if (tg) {
     tg.MainButton.setText(T.save);
