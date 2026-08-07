@@ -348,6 +348,12 @@ input[type="search"]::-webkit-search-cancel-button { -webkit-appearance: none; }
     <div class="tabs" id="city-tabs"></div>
     <div class="grid" id="districts"></div>
     <p class="hint" id="no-districts"></p>
+    <!-- Атрибуция обязательна по лицензии данных (CC BY 4.0) и обязана стоять
+         рядом с ними, а не в отдельном «о программе». Намеренно без перевода:
+         это имя собственное и код лицензии. -->
+    <p class="hint" id="geonames-credit">
+      Bezirke: <a href="https://www.geonames.org/" target="_blank" rel="noopener">GeoNames</a>, CC BY 4.0
+    </p>
   </details>
 </div>
 
@@ -466,12 +472,25 @@ if (!I18N[lang]) lang = 'en';
 var T = I18N[lang];
 
 /* ------------------------------------------------------------------
-   Данные о местах
+   Данные о местах. МАШИННЫЙ БЛОК — пересобирается скриптом
+   scripts/build_city_postcodes.py в репозитории rent-radar.
 
    Индекс — это то, что бот сравнивает точно (\d{4} в фильтре), поэтому
-   у районов Вены value содержит индекс. У остальных городов индекса нет:
-   их бот ищет по названию с границей слова, и подставлять сюда индекс
-   наугад было бы враньём — один город это несколько индексов.
+   value плитки содержит индекс. У городов, которых здесь нет, индекс один
+   на весь город: выбирать нечего, и бот всё равно найдёт их по названию.
+
+   Сюда попадает ТОЛЬКО индекс, по которому реально приходили объявления
+   (замер по выдаче Willhaben, 11 394 объявления). Брать все индексы города
+   из справочника нельзя: в Зальцбурге их 13, а объявления идут по одному —
+   остальные двенадцать плиток нажимались бы и молча не находили ничего.
+
+   Подпись перечисляет ВСЕ районы, которые накрывает индекс, и это важно.
+   У Вены соответствие взаимно однозначное: 1010 — это ровно 1-й район.
+   Больше нигде в Австрии так не устроено: грацкий 8010 накрывает десять
+   Bezirke, и написать на плитке «Innere Stadt» значило бы соврать о том,
+   что будет выбрано. Где имён нет у самого справочника — подписи нет.
+
+   Названия районов: GeoNames, CC BY 4.0.
 ------------------------------------------------------------------ */
 
 var DISTRICTS = {
@@ -484,11 +503,40 @@ var DISTRICTS = {
     ["1160", "Ottakring"],    ["1170", "Hernals"],      ["1180", "Währing"],
     ["1190", "Döbling"],      ["1200", "Brigittenau"],  ["1210", "Floridsdorf"],
     ["1220", "Donaustadt"],   ["1230", "Liesing"]
+  ],
+  "Graz": [
+    ["8010", "Andritz, Geidorf, Innere Stadt, Jakomini, Liebenau, Mariatrost, Ries, Sankt Leonhard, Sankt Peter, Waltendorf"],
+    ["8020", "Eggenberg, Gries, Lend, Puntigam, Straßgang, Wetzelsdorf"],
+    ["8041", "Jakomini, Liebenau, Sankt Peter"],
+    ["8042", "Jakomini, Liebenau, Sankt Peter, Waltendorf"],
+    ["8043", "Andritz, Geidorf, Mariatrost"],
+    ["8044", "Andritz, Mariatrost, Ries"],
+    ["8045", "Andritz"],
+    ["8046", "Andritz"],
+    ["8047", "Ries, Sankt Leonhard, Waltendorf"],
+    ["8051", "Eggenberg, Gösting, Lend, Sankt Peter"],
+    ["8052", "Eggenberg, Gösting, Straßgang, Wetzelsdorf"],
+    ["8053", "Eggenberg, Gries, Straßgang, Wetzelsdorf"],
+    ["8054", "Puntigam, Straßgang"],
+    ["8055", "Gries, Puntigam, Straßgang"]
+  ],
+  "Klagenfurt": [
+    ["9020", "Annabichl, Hörtendorf, Innere Stadt, St. Martin, St. Peter, St. Ruprecht, St.Veiter Vorstadt, Viktring, Viktringer Vorstadt, Villacher Vorstadt, Völkermarkt.Vorst."],
+    ["9061", "Annabichl, Wölfnitz"],
+    ["9073", "St. Ruprecht, Viktring"]
+  ],
+  "Linz": [
+    ["4020", ""], ["4030", ""], ["4040", ""]
+  ],
+  "Salzburg": [
+    ["5020", ""], ["5023", ""], ["5026", ""]
+  ],
+  "St. Pölten": [
+    ["3100", ""], ["3107", ""]
+  ],
+  "Kapfenberg": [
+    ["8600", ""], ["8605", ""]
   ]
-  // Грац, Линц, Зальцбург и прочие появятся здесь, когда будет ПРОВЕРЕННЫЙ
-  // список индексов: их собирает scripts/fetch_city_postcodes.py на сервере.
-  // Вписывать по памяти нельзя — бот сравнивает индекс точно, и один
-  // выдуманный индекс = фильтр, который молча не находит ничего.
 };
 
 var CITIES = [
@@ -634,11 +682,16 @@ function renderDistricts() {
 
   list.forEach(function (d) {
     var v = districtValue(activeCity, d);
-    box.appendChild(button(
+    var chip = button(
       'chip' + (has(v) ? ' on' : ''),
       '<b>' + d[0] + '</b><small>' + esc(d[1]) + '</small>',
       function () { toggle(v); }
-    ));
+    );
+    // Подпись обрезается по ширине плитки (text-overflow: ellipsis), а у
+    // Граца в ней до десяти районов. Полное перечисление кладём в title —
+    // иначе человек видит «Andritz, Geidorf, Inn…» и не знает, что ещё внутри.
+    if (d[1]) chip.title = d[0] + " — " + d[1];
+    box.appendChild(chip);
   });
 }
 
@@ -669,7 +722,12 @@ function label(v) {
   if (!city) return v;
   var code = v.split(' ')[0];
   var d = DISTRICTS[city].filter(function (x) { return x[0] === code; })[0];
-  return d ? d[0] + " " + d[1] : v;
+  if (!d) return v;
+  // Имя района ставим в тег, только если оно короткое. У Вены это всегда так
+  // («1090 Alsergrund»), а у Граца индекс накрывает десять районов, и полное
+  // перечисление растянуло бы тег на пол-экрана. Тогда показываем город —
+  // «8010 Graz», — а перечисление остаётся в подписи плитки и в title.
+  return d[1] && d[1].length <= 24 ? d[0] + " " + d[1] : d[0] + " " + city;
 }
 
 function render() {
