@@ -915,6 +915,25 @@ var DISTRICT_VALUES = (function () {
 })();
 
 function isDistrict(v) { return Object.prototype.hasOwnProperty.call(DISTRICT_VALUES, v); }
+
+/* Канонический ключ места, под которым лежит значение.
+ *
+ * Нормализация обязательна, и её отсутствие уже стоило бага. Венские плитки
+ * попадают в DISTRICT_VALUES дважды — от города «Wien» и от земли «land:Wien»,
+ * — и побеждает записанный последним. Из-за этого правило «город перекрывает
+ * свои районы» работало у Граца и НЕ работало у Вены: ключи просто не
+ * совпадали. Разное поведение в двух городах при одинаковом коде. */
+function areaKeyOf(value) {
+  var key = cityOfDistrict(value);
+  if (!key) return "";
+  return landOf(key) || key;
+}
+
+/* Что уже выбрано внутри этого места. */
+function picksUnder(key) {
+  var plain = landOf(key) || key;
+  return chosen.filter(function (x) { return areaKeyOf(x) === plain; });
+}
 function cityOfDistrict(v) { return DISTRICT_VALUES[v]; }
 
 /*
@@ -954,7 +973,7 @@ function toggle(v) {
     chosen = chosen.filter(function (x) { return x !== city && x !== landOf(city); });
     activeCity = city;
   } else if (areasOf(v)) {
-    chosen = chosen.filter(function (x) { return cityOfDistrict(x) !== v; });
+    chosen = chosen.filter(function (x) { return areaKeyOf(x) !== (landOf(v) || v); });
     activeCity = v;
   }
   // Города без своей сетки активными НЕ становятся, и это принципиально:
@@ -997,7 +1016,12 @@ function renderDistricts() {
   // Имена и индексы верстаются по-разному: у индексов ширина фиксированная
   // и предсказуемая, у имён — нет. См. .grid.names в стилях.
   // Индексы у Вены — узкие предсказуемые плитки, всё остальное — имена.
-  box.className = 'grid' + (DISTRICTS[activeCity] ? '' : ' names');
+  //
+  // Ключ обязательно нормализуем. Вкладка Вены по умолчанию — «land:Wien», и
+  // без снятия метки DISTRICTS['land:Wien'] не находился: венские плитки
+  // получали раскладку для имён, где .chip это flex, и «1010» с «Innere Stadt»
+  // склеивались в одну строку вместо двух.
+  box.className = 'grid' + (DISTRICTS[landOf(activeCity) || activeCity] ? '' : ' names');
   $('no-districts').textContent = list ? '' : T.no_districts.replace('{city}', activeCity);
 
   var picked = chosen.filter(function (v) { return cityOfDistrict(v) === activeCity; }).length;
@@ -1033,6 +1057,20 @@ function renderDistricts() {
 function tapPlace(key) {
   activeCity = key;
   $('areas').open = true;
+
+  // Если внутри места уже что-то выбрано, нажатие ТОЛЬКО открывает его и
+  // ничего не трогает.
+  //
+  // Иначе получалось разрушительно: выбрал район Граца, свернул, нажал
+  // «Graz» ещё раз посмотреть — и выбор пропал. Правило «город перекрывает
+  // свои районы» само по себе верное (город матчится по имени и включает их
+  // все), но применять его к жесту, которым человек просто возвращается
+  // посмотреть, нельзя: он теряет работу, не поняв, за что.
+  //
+  // Сужение в обратную сторону остаётся: выбрал район — город с выбора
+  // снимается, потому что там намерение однозначное.
+  if (picksUnder(key).length) { render(); return; }
+
   toggle(key);
 }
 
