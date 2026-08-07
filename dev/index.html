@@ -112,6 +112,11 @@ body {
 .chip.on { background: var(--accent); color: var(--on-accent); }
 .chip.on small { color: var(--on-accent); opacity: .8; }
 
+/* Место, чьи районы сейчас показаны. Отдельно от .on: выбранное и открытое —
+   разные вещи, и человек должен видеть, к чему относится сетка под рядом.
+   Обводка, а не заливка, чтобы не спорить с .on, когда они совпадают. */
+.chip.active { border-color: var(--accent); }
+
 .chip.wide { grid-column: 1 / -1; text-align: center; }
 .chip.wide b { font-size: 14px; }
 
@@ -371,7 +376,6 @@ input[type="search"]::-webkit-search-cancel-button { -webkit-appearance: none; }
 
   <details id="areas">
     <summary><span id="l-districts"></span><b id="districts-count"></b></summary>
-    <div class="tabs" id="city-tabs"></div>
     <div class="grid" id="districts"></div>
     <p class="hint" id="no-districts"></p>
     <!-- Атрибуция обязательна по лицензии данных (CC BY 4.0) и обязана стоять
@@ -776,9 +780,18 @@ var CITIES = [
   "Knittelfeld", "Gänserndorf", "Mistelbach", "Ansfelden", "Saalfelden"
 ];
 
-/* Первый ряд — то, что выбирают чаще всего, чтобы до этого не надо было
-   печатать. «Wien» здесь означает всю Вену целиком: отдельная кнопка
-   «Вся Вена» над районами была тем же самым, только занимала ещё строку. */
+/* Единственный ряд мест. Раньше их было два — «популярные города» сверху и
+   переключатель внутри блока районов, — и они делали пересекающееся: оба
+   отвечали на «где ищем». Человек видел Graz в обоих рядах и не понимал,
+   чем один отличается от другого.
+
+   Теперь один ряд, и нажатие делает сразу два дела: выбирает место и
+   открывает под ним его районы. Это и есть ответ на «нажал на место — выбери
+   район»: не нужно искать второй переключатель, его нет.
+
+   Сначала города, потому что их выбирают чаще; потом земли. Земля Wien в
+   список не входит: она совпадает с городом целиком, и вторая одинаковая
+   кнопка была бы просто дублем. */
 var POPULAR = ["Wien", "Graz", "Linz", "Salzburg", "Innsbruck", "Klagenfurt"];
 
 var ALL_VIENNA = "Wien";
@@ -880,6 +893,13 @@ var REGIONS = ["Burgenland", "Kärnten", "Niederösterreich", "Oberösterreich",
    вкладкой это было бы дублем. */
 function citiesWithOwnDistricts() { return Object.keys(CITY_DISTRICTS); }
 
+/* Тот самый единственный ряд: города, потом земли. Ключ чипа он же и есть
+   значение, которое уедет боту, — второго словаря не заводим, потому что
+   именно рассинхрон двух списков и порождал бы плитки, ведущие в никуда. */
+var PLACES = POPULAR.concat(
+  REGIONS.filter(function (r) { return r !== ALL_VIENNA; }).map(landKey)
+);
+
 function citiesWithAreas() {
   return citiesWithOwnDistricts().concat(REGIONS.map(landKey));
 }
@@ -966,22 +986,6 @@ function esc(s) {
   });
 }
 
-function renderTabs() {
-  var box = $('city-tabs');
-  var cities = tabCities();
-  box.innerHTML = '';
-
-  // При одном выбранном городе вкладка была бы кнопкой без выбора —
-  // название и так стоит в заголовке блока.
-  if (cities.length < 2) return;
-
-  cities.forEach(function (key) {
-    box.appendChild(button(key === activeCity ? 'on' : '', esc(tabLabel(key)), function () {
-      activeCity = key;
-      render();
-    }));
-  });
-}
 
 function renderDistricts() {
   var box = $('districts');
@@ -1015,14 +1019,31 @@ function renderDistricts() {
   });
 }
 
+/*
+ * Нажатие на место: выбрать его И открыть под ним его районы.
+ *
+ * Два действия одним касанием — это не срез угла, а суть переделки. Раньше
+ * выбор места и переключение сетки районов были разными рядами кнопок, и
+ * человек не понимал, зачем ему второй. Теперь ряд один: нажал «Graz» —
+ * он выбран, и его 17 районов сразу под рукой, если захочется сузить.
+ *
+ * activeCity ставится ДО toggle: toggle сам делает render, и порядок иначе
+ * дал бы кадр со старой сеткой.
+ */
+function tapPlace(key) {
+  activeCity = key;
+  $('areas').open = true;
+  toggle(key);
+}
+
 function renderPopular() {
   var box = $('popular');
   box.innerHTML = '';
-  POPULAR.forEach(function (city) {
+  PLACES.forEach(function (key) {
     box.appendChild(button(
-      'chip' + (has(city) ? ' on' : ''),
-      '<b>' + esc(city) + '</b>',
-      function () { toggle(city); }
+      'chip' + (has(key) ? ' on' : '') + (key === activeCity ? ' active' : ''),
+      '<b>' + esc(tabLabel(key)) + '</b>',
+      function () { tapPlace(key); }
     ));
   });
 }
@@ -1038,6 +1059,10 @@ function renderChosen() {
 }
 
 function label(v) {
+  // Земля — не район, в DISTRICT_VALUES её нет, поэтому снимаем метку до
+  // всего остального: иначе тег показывал бы «land:Steiermark».
+  if (landOf(v)) return landOf(v);
+
   // Ключ нормализуем: у Вены значения приходят и от вкладки города «Wien»,
   // и от вкладки земли «land:Wien» — это одни и те же 23 плитки, и в карте
   // побеждает та, что записалась последней. Без снятия метки поиск подписи
@@ -1071,7 +1096,6 @@ function render() {
   var cities = tabCities();
   if (cities.indexOf(activeCity) === -1) activeCity = cities[0] || landKey(ALL_VIENNA);
 
-  renderTabs();
   renderDistricts();
   renderPopular();
   renderChosen();
