@@ -353,6 +353,7 @@ input[type="search"]::-webkit-search-cancel-button { -webkit-appearance: none; }
          это имя собственное и код лицензии. -->
     <p class="hint" id="geonames-credit">
       Bezirke: <a href="https://www.geonames.org/" target="_blank" rel="noopener">GeoNames</a>, CC BY 4.0
+      · © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>, ODbL
     </p>
   </details>
 </div>
@@ -504,27 +505,6 @@ var DISTRICTS = {
     ["1190", "Döbling"],      ["1200", "Brigittenau"],  ["1210", "Floridsdorf"],
     ["1220", "Donaustadt"],   ["1230", "Liesing"]
   ],
-  "Graz": [
-    ["8010", "Andritz, Geidorf, Innere Stadt, Jakomini, Liebenau, Mariatrost, Ries, Sankt Leonhard, Sankt Peter, Waltendorf"],
-    ["8020", "Eggenberg, Gries, Lend, Puntigam, Straßgang, Wetzelsdorf"],
-    ["8041", "Jakomini, Liebenau, Sankt Peter"],
-    ["8042", "Jakomini, Liebenau, Sankt Peter, Waltendorf"],
-    ["8043", "Andritz, Geidorf, Mariatrost"],
-    ["8044", "Andritz, Mariatrost, Ries"],
-    ["8045", "Andritz"],
-    ["8046", "Andritz"],
-    ["8047", "Ries, Sankt Leonhard, Waltendorf"],
-    ["8051", "Eggenberg, Gösting, Lend, Sankt Peter"],
-    ["8052", "Eggenberg, Gösting, Straßgang, Wetzelsdorf"],
-    ["8053", "Eggenberg, Gries, Straßgang, Wetzelsdorf"],
-    ["8054", "Puntigam, Straßgang"],
-    ["8055", "Gries, Puntigam, Straßgang"]
-  ],
-  "Klagenfurt": [
-    ["9020", "Annabichl, Hörtendorf, Innere Stadt, St. Martin, St. Peter, St. Ruprecht, St.Veiter Vorstadt, Viktring, Viktringer Vorstadt, Villacher Vorstadt, Völkermarkt.Vorst."],
-    ["9061", "Annabichl, Wölfnitz"],
-    ["9073", "St. Ruprecht, Viktring"]
-  ],
   "Linz": [
     ["4020", ""], ["4030", ""], ["4040", ""]
   ],
@@ -536,6 +516,42 @@ var DISTRICTS = {
   ],
   "Kapfenberg": [
     ["8600", ""], ["8605", ""]
+  ]
+};
+
+/* ------------------------------------------------------------------
+   Районы городов. МАШИННЫЙ БЛОК — пересобирается командой
+   scripts/fetch_district_boundaries.py --emit-js в репозитории rent-radar.
+
+   Эти районы бот определяет по КООРДИНАТАМ объявления, а не по индексу, и
+   иначе нельзя: в Граце 8010 накрывает десять районов сразу, а Andritz
+   размазан по пяти индексам. Значение уезжает боту с меткой «stadtteil:».
+
+   Вены здесь нет намеренно. У неё 1010 = 1-й район один в один, и плитки
+   индексов работают для ВСЕХ трёх площадок — включая Der Standard, который
+   координат не отдаёт вовсе. Имена дали бы там то же самое, но менее точно.
+
+   Городов мало не потому, что про остальные забыли: у Линца, Зальцбурга,
+   Филлаха и Вельса размеченных границ районов в OSM не существует. Там
+   работают плитки индексов выше.
+
+   Границы: © участники OpenStreetMap, ODbL.
+------------------------------------------------------------------ */
+
+var CITY_DISTRICTS = {
+  "Graz": [
+    "Andritz", "Eggenberg", "Geidorf", "Gries", "Gösting", "Innere Stadt",
+    "Jakomini", "Lend", "Liebenau", "Mariatrost", "Puntigam", "Ries",
+    "Sankt Leonhard", "Sankt Peter", "Straßgang", "Waltendorf", "Wetzelsdorf"
+  ],
+  "Klagenfurt": [
+    "Annabichl", "Hörtendorf", "Innere Stadt", "St. Martin", "St. Peter",
+    "St. Ruprecht", "St. Veiter Vorstadt", "Viktring", "Viktringer Vorstadt",
+    "Villacher Vorstadt", "Völkermarkter Vorstadt", "Wölfnitz"
+  ],
+  "Innsbruck": [
+    "Amras", "Arzl", "Hötting", "Igls", "Innsbruck", "Mühlau", "Pradl",
+    "Vill", "Wilten"
   ]
 };
 
@@ -568,14 +584,51 @@ var activeCity = ALL_VIENNA;   // чьи районы сейчас показа�
 
 function has(v) { return chosen.indexOf(v) !== -1; }
 
-function districtValue(city, d) { return d[0] + " " + city; }
+/*
+ * Плитки одного города. Их два вида, и разница не косметическая.
+ *
+ *   имена районов   Грац, Клагенфурт, Инсбрук. Бот определяет район по
+ *                   КООРДИНАТАМ объявления, поэтому значение уезжает меткой
+ *                   «stadtteil:Jakomini». По индексу это невозможно: 8010 в
+ *                   Граце накрывает десять районов сразу.
+ *
+ *   индексы         Вена и все остальные. У Вены 1010 = 1-й район один в
+ *                   один, и индекс работает для ВСЕХ трёх площадок, включая
+ *                   Der Standard, который координат не отдаёт вовсе. Имена
+ *                   дали бы там то же самое, но менее точно.
+ *
+ * Возвращает null, если у города плиток нет вообще.
+ */
+function areasOf(city) {
+  var names = CITY_DISTRICTS[city];
+  if (names) {
+    return names.map(function (n) {
+      return { value: "stadtteil:" + n, big: n, small: "" };
+    });
+  }
+  var codes = DISTRICTS[city];
+  if (codes) {
+    return codes.map(function (d) {
+      return { value: d[0] + " " + city, big: d[0], small: d[1] };
+    });
+  }
+  return null;
+}
+
+function citiesWithAreas() {
+  var out = Object.keys(CITY_DISTRICTS);
+  Object.keys(DISTRICTS).forEach(function (c) {
+    if (out.indexOf(c) === -1) out.push(c);
+  });
+  return out;
+}
 
 /* Все значения-районы всех городов сразу: нужно, чтобы отличить «выбран
    город» от «выбран район города» в одном плоском списке chosen. */
 var DISTRICT_VALUES = (function () {
   var set = {};
-  Object.keys(DISTRICTS).forEach(function (city) {
-    DISTRICTS[city].forEach(function (d) { set[districtValue(city, d)] = city; });
+  citiesWithAreas().forEach(function (city) {
+    (areasOf(city) || []).forEach(function (a) { set[a.value] = city; });
   });
   return set;
 })();
@@ -600,7 +653,7 @@ function tabCities() {
   });
   // Города, у которых район выбрать вообще можно, доступны всегда — иначе,
   // выбрав Грац, человек терял бы дорогу обратно к районам Вены.
-  Object.keys(DISTRICTS).forEach(function (city) {
+  citiesWithAreas().forEach(function (city) {
     if (out.indexOf(city) === -1) out.push(city);
   });
   if (out.indexOf(activeCity) === -1) out.push(activeCity);
@@ -618,7 +671,7 @@ function toggle(v) {
     var city = cityOfDistrict(v);
     chosen = chosen.filter(function (x) { return x !== city; });
     activeCity = city;
-  } else if (DISTRICTS[v]) {
+  } else if (areasOf(v)) {
     chosen = chosen.filter(function (x) { return cityOfDistrict(x) !== v; });
     activeCity = v;
   } else {
@@ -668,7 +721,7 @@ function renderTabs() {
 
 function renderDistricts() {
   var box = $('districts');
-  var list = DISTRICTS[activeCity] || null;
+  var list = areasOf(activeCity);
 
   $('l-districts').textContent = T.districts_of.replace('{city}', activeCity);
 
@@ -680,17 +733,20 @@ function renderDistricts() {
 
   if (!list) return;
 
-  list.forEach(function (d) {
-    var v = districtValue(activeCity, d);
+  list.forEach(function (a) {
+    // Плитка с именем района занимает всю ширину: «Rudolfsheim-Fünfhaus» или
+    // «Völkermarkter Vorstadt» в колонку 96px не влезает и обрезался бы в
+    // многоточие, а по обрезанному имени район не выбирают.
+    var wide = a.small === "" && a.big.length > 9 ? " wide" : "";
     var chip = button(
-      'chip' + (has(v) ? ' on' : ''),
-      '<b>' + d[0] + '</b><small>' + esc(d[1]) + '</small>',
-      function () { toggle(v); }
+      'chip' + (has(a.value) ? ' on' : '') + wide,
+      '<b>' + esc(a.big) + '</b>' + (a.small ? '<small>' + esc(a.small) + '</small>' : ''),
+      function () { toggle(a.value); }
     );
     // Подпись обрезается по ширине плитки (text-overflow: ellipsis), а у
     // Граца в ней до десяти районов. Полное перечисление кладём в title —
     // иначе человек видит «Andritz, Geidorf, Inn…» и не знает, что ещё внутри.
-    if (d[1]) chip.title = d[0] + " — " + d[1];
+    if (a.small) chip.title = a.big + " — " + a.small;
     box.appendChild(chip);
   });
 }
@@ -720,8 +776,15 @@ function renderChosen() {
 function label(v) {
   var city = cityOfDistrict(v);
   if (!city) return v;
+
+  // Район по имени: метку stadtteil: человеку показывать незачем, она
+  // служебная и нужна только боту, чтобы отличить район города от округа.
+  if (v.indexOf("stadtteil:") === 0) {
+    return v.slice("stadtteil:".length) + ", " + city;
+  }
+
   var code = v.split(' ')[0];
-  var d = DISTRICTS[city].filter(function (x) { return x[0] === code; })[0];
+  var d = (DISTRICTS[city] || []).filter(function (x) { return x[0] === code; })[0];
   if (!d) return v;
   // Имя района ставим в тег, только если оно короткое. У Вены это всегда так
   // («1090 Alsergrund»), а у Граца индекс накрывает десять районов, и полное
