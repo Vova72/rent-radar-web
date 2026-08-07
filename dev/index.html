@@ -53,7 +53,7 @@ body {
 
 /* ---------- Чипы: районы, города, выбранное ---------- */
 
-.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
 
 .grid {
   display: grid;
@@ -103,6 +103,44 @@ body {
   cursor: pointer;
 }
 .tag span { font-size: 15px; line-height: 1; opacity: .75; }
+
+/* Районы свёрнуты по умолчанию: 23 плитки занимали весь экран, а нужны они
+   далеко не всем — большинству хватает «Wien» целиком. Раскрываются сами,
+   если у человека уже выбран хотя бы один район. */
+
+details { margin-top: 10px; }
+
+details summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  list-style: none;
+  cursor: pointer;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--bg);
+  font-size: 14px;
+  user-select: none;
+}
+details summary::-webkit-details-marker { display: none; }
+details summary::before {
+  content: '';
+  width: 0;
+  height: 0;
+  border-left: 5px solid currentColor;
+  border-top: 4px solid transparent;
+  border-bottom: 4px solid transparent;
+  opacity: .5;
+  transition: transform .15s;
+}
+details[open] summary::before { transform: rotate(90deg); }
+details summary b {
+  margin-left: auto;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--accent);
+}
+details .grid { margin-top: 8px; }
 
 /* ---------- Поиск по адресу ---------- */
 
@@ -283,17 +321,17 @@ input[type="search"]::-webkit-search-cancel-button { -webkit-appearance: none; }
 <div id="stand">DEV</div>
 
 <div class="card">
-  <h2 id="l-vienna">Вена по районам</h2>
-  <div class="grid" id="districts"></div>
-</div>
-
-<div class="card">
-  <h2 id="l-other">Другой город или адрес</h2>
+  <h2 id="l-where">Где ищем</h2>
   <div class="search">
     <input type="search" id="q" autocomplete="off" enterkeyhint="search">
     <div id="found"></div>
   </div>
-  <div class="chips" id="popular" style="margin-top:10px"></div>
+  <div class="chips" id="popular"></div>
+
+  <details id="vienna">
+    <summary><span id="l-districts">Районы Вены</span><b id="districts-count"></b></summary>
+    <div class="grid" id="districts"></div>
+  </details>
 </div>
 
 <div class="card" id="chosen-card" style="display:none">
@@ -357,29 +395,29 @@ if (tg) { tg.ready(); tg.expand(); }
 
 var I18N = {
   ru: {
-    vienna: "Вена по районам", all_vienna: "Вся Вена", other: "Другой город или адрес",
+    where: "Где ищем", districts: "Районы Вены",
     search_ph: "Город, посёлок или индекс", chosen: "Выбрано",
     chosen_hint: "Пусто = вся Австрия. Нажми на пункт, чтобы убрать.",
     params: "Параметры", price: "Цена", sq: "Площадь", rooms: "Комнаты",
-    any: "любая", any_m: "любое", from: "от", to: "до",
+    any: "любая", any_m: "любые", from: "от", to: "до",
     agency: "Скрывать объявления агентств",
     agency_sub: "Останутся частные и те, где площадка не сказала, кто сдаёт",
     save: "СОХРАНИТЬ ФИЛЬТРЫ", searching: "Ищем по Австрии…", empty: "Ничего не нашлось",
     offline: "Поиск по адресу сейчас недоступен"
   },
   uk: {
-    vienna: "Відень за районами", all_vienna: "Весь Відень", other: "Інше місто або адреса",
+    where: "Де шукаємо", districts: "Райони Відня",
     search_ph: "Місто, селище або індекс", chosen: "Обрано",
     chosen_hint: "Порожньо = вся Австрія. Натисни на пункт, щоб прибрати.",
     params: "Параметри", price: "Ціна", sq: "Площа", rooms: "Кімнати",
-    any: "будь-яка", any_m: "будь-яке", from: "від", to: "до",
+    any: "будь-яка", any_m: "будь-які", from: "від", to: "до",
     agency: "Приховувати оголошення агенцій",
     agency_sub: "Залишаться приватні й ті, де майданчик не сказав, хто здає",
     save: "ЗБЕРЕГТИ ФІЛЬТРИ", searching: "Шукаємо по Австрії…", empty: "Нічого не знайшлось",
     offline: "Пошук за адресою зараз недоступний"
   },
   en: {
-    vienna: "Vienna by district", all_vienna: "All of Vienna", other: "Other city or address",
+    where: "Where to search", districts: "Vienna districts",
     search_ph: "City, town or postcode", chosen: "Selected",
     chosen_hint: "Empty = all of Austria. Tap an item to remove it.",
     params: "Parameters", price: "Price", sq: "Area", rooms: "Rooms",
@@ -390,7 +428,7 @@ var I18N = {
     offline: "Address search is unavailable right now"
   },
   de: {
-    vienna: "Wien nach Bezirken", all_vienna: "Ganz Wien", other: "Andere Stadt oder Adresse",
+    where: "Wo suchen", districts: "Wiener Bezirke",
     search_ph: "Stadt, Ort oder PLZ", chosen: "Ausgewählt",
     chosen_hint: "Leer = ganz Österreich. Zum Entfernen antippen.",
     params: "Parameter", price: "Preis", sq: "Fläche", rooms: "Zimmer",
@@ -443,8 +481,10 @@ var CITIES = [
   "Knittelfeld", "Gänserndorf", "Mistelbach", "Ansfelden", "Saalfelden"
 ];
 
-/* Крупнейшие — отдельным рядом, чтобы до них не надо было печатать */
-var POPULAR = ["Graz", "Linz", "Salzburg", "Innsbruck", "Klagenfurt"];
+/* Первый ряд — то, что выбирают чаще всего, чтобы до этого не надо было
+   печатать. «Wien» здесь означает всю Вену целиком: отдельная кнопка
+   «Вся Вена» над районами была тем же самым, только занимала ещё строку. */
+var POPULAR = ["Wien", "Graz", "Linz", "Salzburg", "Innsbruck", "Klagenfurt"];
 
 var ALL_VIENNA = "Wien";
 
@@ -502,11 +542,9 @@ function renderDistricts() {
   var box = $('districts');
   box.innerHTML = '';
 
-  box.appendChild(button(
-    'chip wide' + (has(ALL_VIENNA) ? ' on' : ''),
-    '<b>' + esc(T.all_vienna) + '</b>',
-    function () { toggle(ALL_VIENNA); }
-  ));
+  var picked = 0;
+  VIENNA.forEach(function (d) { if (has(districtValue(d))) picked++; });
+  $('districts-count').textContent = picked ? String(picked) : '';
 
   VIENNA.forEach(function (d) {
     var v = districtValue(d);
@@ -596,7 +634,7 @@ var paintPrice = setupRange('price', function (a, b, floor, ceil) {
 });
 
 var paintSq = setupRange('sq', function (a, b, floor, ceil) {
-  if (floor && ceil) return T.any_m;
+  if (floor && ceil) return T.any;
   if (floor) return T.to + ' ' + b + ' m²';
   if (ceil)  return T.from + ' ' + a + ' m²';
   return a + ' – ' + b + ' m²';
@@ -638,6 +676,7 @@ function showResults(items, message) {
   items.forEach(function (it) {
     box.appendChild(button('', esc(it.label), function () {
       if (!has(it.value)) toggle(it.value);
+      if (isDistrict(it.value)) $('vienna').open = true;
       $('q').value = '';
       box.style.display = 'none';
     }));
@@ -711,8 +750,8 @@ function restore(id, name, fallbackToBound) {
   }
 
   // Подписи
-  $('l-vienna').textContent = T.vienna;
-  $('l-other').textContent = T.other;
+  $('l-where').textContent = T.where;
+  $('l-districts').textContent = T.districts;
   $('l-chosen').textContent = T.chosen;
   $('l-chosen-hint').textContent = T.chosen_hint;
   $('l-params').textContent = T.params;
@@ -742,6 +781,10 @@ function restore(id, name, fallbackToBound) {
 
   render();
   paintPrice(); paintSq(); paintRooms();
+
+  // Раскрываем районы сразу, если человек их уже выбирал: иначе он открывает
+  // фильтры и не видит собственного выбора — выглядит как потеря настроек.
+  if (chosen.some(isDistrict)) $('vienna').open = true;
 
   if (tg) {
     tg.MainButton.setText(T.save);
