@@ -534,6 +534,114 @@ var DISTRICTS = {
 };
 
 /* ---------------------------------------------------------------
+   Районы городов. МАШИННЫЙ БЛОК — пересобирается
+   scripts/fetch_district_boundaries.py --emit-js в rent-radar.
+
+   Эти районы определяются по КООРДИНАТАМ объявления, а не по
+   индексу, и иначе нельзя: в Граце 8010 накрывает десять районов
+   сразу. Значение уезжает боту с меткой stadtteil:.
+
+   Городов здесь мало не потому, что остальные забыли, а потому
+   что размеченных границ у них нет: у Линца, Зальцбурга, Филлаха
+   и Вельса в OSM их не существует. Там работают плитки индексов.
+
+   Границы: © участники OpenStreetMap, ODbL.
+--------------------------------------------------------------- */
+var CITY_DISTRICTS = {
+  "Graz": [
+    "Andritz",
+    "Eggenberg",
+    "Geidorf",
+    "Gries",
+    "Gösting",
+    "Innere Stadt",
+    "Jakomini",
+    "Lend",
+    "Liebenau",
+    "Mariatrost",
+    "Puntigam",
+    "Ries",
+    "Sankt Leonhard",
+    "Sankt Peter",
+    "Straßgang",
+    "Waltendorf",
+    "Wetzelsdorf"
+  ],
+  "Innsbruck": [
+    "Amras",
+    "Arzl",
+    "Hötting",
+    "Igls",
+    "Innsbruck",
+    "Mühlau",
+    "Pradl",
+    "Vill",
+    "Wilten"
+  ],
+  "Klagenfurt": [
+    "Annabichl",
+    "Hörtendorf",
+    "Innere Stadt",
+    "St. Martin",
+    "St. Peter",
+    "St. Ruprecht",
+    "St. Veiter Vorstadt",
+    "Viktring",
+    "Viktringer Vorstadt",
+    "Villacher Vorstadt",
+    "Völkermarkter Vorstadt",
+    "Wölfnitz"
+  ],
+  "Linz": [
+    "Bindermichl-Keferfeld",
+    "Bulgariplatz",
+    "Dornach-Auhof",
+    "Ebelsberg",
+    "Franckviertel",
+    "Froschberg",
+    "Industriegebiet-Hafen",
+    "Innere Stadt",
+    "Kaplanhof",
+    "Kleinmünchen-Auwiesen",
+    "Neue Heimat",
+    "Pichling",
+    "Pöstlingberg",
+    "Spallerhof",
+    "St. Magdalena",
+    "Urfahr"
+  ],
+  "Salzburg": [
+    "Aigen",
+    "Altstadt",
+    "Elisabeth-Vorstadt",
+    "Gaisberg",
+    "Gneis",
+    "Gneis Süd",
+    "Gnigl",
+    "Hellbrunn",
+    "Heuberg",
+    "Itzling",
+    "Itzling Nord",
+    "Kasern",
+    "Langwied",
+    "Lehen",
+    "Leopoldskroner Moos",
+    "Liefering",
+    "Maxglan",
+    "Maxglan West",
+    "Morzg",
+    "Mülln",
+    "Neustadt",
+    "Nonntal",
+    "Parsch",
+    "Riedenburg",
+    "Salzburg Süd",
+    "Schallmoos",
+    "Taxham"
+  ],
+};
+
+/* ---------------------------------------------------------------
    Земля -> округа. МАШИННЫЙ БЛОК — пересобирается
    scripts/build_geo_index.py --emit-js в репозитории rent-radar.
 
@@ -680,7 +788,25 @@ var ALL_VIENNA = "Wien";
 ------------------------------------------------------------------ */
 
 var chosen = [];      // массив строк ровно в том виде, в каком уедут боту
-var activeCity = ALL_VIENNA;   // чьи районы сейчас показаны в блоке
+/* Ключ земли помечается, и это не педантизм.
+ *
+ * Земля Salzburg и город Salzburg называются одинаково. Без пометки вкладка
+ * земли схлопывалась с вкладкой города, и шесть округов земли — Hallein,
+ * Zell am See, Sankt Johann im Pongau и остальные — становились недостижимы.
+ * Молча: список выглядел полным, просто одного пункта в нём не было.
+ *
+ * То же самое верно для Tirol/Innsbruck и Kärnten/Klagenfurt, только там
+ * имена не совпадают и потому не сталкивались. */
+var LAND = "land:";
+
+function landKey(name) { return LAND + name; }
+function landOf(key) { return key.indexOf(LAND) === 0 ? key.slice(LAND.length) : ""; }
+
+/* Вкладка по умолчанию — земля «Wien», а не город: у Вены земля и город это
+   одно и то же место, обе вкладки показали бы одни и те же 23 плитки, и в
+   ряду появлялись бы два одинаковых «Wien» подряд. ALL_VIENNA при этом
+   остаётся значением «вся Вена целиком», которое уезжает боту. */
+var activeCity = landKey(ALL_VIENNA);   // чьи районы сейчас показаны в блоке
 
 function has(v) { return chosen.indexOf(v) !== -1; }
 
@@ -698,24 +824,50 @@ function has(v) { return chosen.indexOf(v) !== -1; }
  *
  * Возвращает null, если у города плиток нет вообще.
  */
-function areasOf(region) {
+function areasOf(key) {
+  var land = landOf(key);
+  if (land) {
+    var bezirke = BEZIRKE[land];
+    if (bezirke) {
+      // Земля: её округа. Метка «bezirk:», отдельная от районов города —
+      // это разные уровни, и по-немецки оба называются Bezirk.
+      return bezirke.map(function (n) {
+        return { value: "bezirk:" + n, big: n, small: "" };
+      });
+    }
+    // Вена — единственная земля, совпадающая с городом целиком: округ у неё
+    // один на всю землю, делить её надо на районы. Отдаём их же.
+    return areasOf(land);
+  }
+
   // Вена: 23 района плитками индексов. Индекс и район у неё совпадают один в
   // один (1010 = 1-й), и по индексу объявление находится у ВСЕХ трёх площадок,
   // включая Der Standard. Ровно так же её разбивает и сам Willhaben.
-  var codes = DISTRICTS[region];
+  var codes = DISTRICTS[key];
   if (codes) {
     return codes.map(function (d) {
-      return { value: d[0] + " " + region, big: d[0], small: d[1] };
+      return { value: d[0] + " " + key, big: d[0], small: d[1] };
     });
   }
-  // Остальные земли: округа. Значение уезжает боту с меткой «bezirk:».
-  var names = BEZIRKE[region];
-  if (names) {
-    return names.map(function (n) {
-      return { value: "bezirk:" + n, big: n, small: "" };
+  // Город с размеченными районами: Грац, Линц, Зальцбург, Клагенфурт,
+  // Инсбрук. Бот определяет такой район по КООРДИНАТАМ объявления, поэтому
+  // метка своя — «stadtteil:». По индексу это невозможно: в Граце 8010
+  // накрывает десять районов сразу.
+  var districts = CITY_DISTRICTS[key];
+  if (districts) {
+    return districts.map(function (n) {
+      return { value: "stadtteil:" + n, big: n, small: "" };
     });
   }
   return null;
+}
+
+/* Подпись вкладки. У земли, чьё имя совпадает с городом, добавляется
+   пояснение — иначе две соседние вкладки «Salzburg» неотличимы. */
+function tabLabel(key) {
+  var land = landOf(key);
+  if (!land) return key;
+  return CITY_DISTRICTS[land] ? land + " · Land" : land;
 }
 
 /* Девять земель в том же порядке, в каком их показывает Willhaben. Порядок
@@ -723,14 +875,21 @@ function areasOf(region) {
 var REGIONS = ["Burgenland", "Kärnten", "Niederösterreich", "Oberösterreich",
                "Salzburg", "Steiermark", "Tirol", "Vorarlberg", "Wien"];
 
-function citiesWithAreas() { return REGIONS.slice(); }
+/* Города, у которых есть СВОЯ сетка районов. Вена в этот список не входит:
+   у неё сетка тоже своя, но она совпадает с землёй «Wien», и отдельной
+   вкладкой это было бы дублем. */
+function citiesWithOwnDistricts() { return Object.keys(CITY_DISTRICTS); }
 
-/* Все значения-районы всех городов сразу: нужно, чтобы отличить «выбран
-   город» от «выбран район города» в одном плоском списке chosen. */
+function citiesWithAreas() {
+  return citiesWithOwnDistricts().concat(REGIONS.map(landKey));
+}
+
+/* Все значения-районы сразу: нужно, чтобы отличить «выбран город» от
+   «выбран район города» в одном плоском списке chosen. */
 var DISTRICT_VALUES = (function () {
   var set = {};
-  citiesWithAreas().forEach(function (city) {
-    (areasOf(city) || []).forEach(function (a) { set[a.value] = city; });
+  citiesWithAreas().forEach(function (key) {
+    (areasOf(key) || []).forEach(function (a) { set[a.value] = key; });
   });
   return set;
 })();
@@ -739,25 +898,24 @@ function isDistrict(v) { return Object.prototype.hasOwnProperty.call(DISTRICT_VA
 function cityOfDistrict(v) { return DISTRICT_VALUES[v]; }
 
 /*
- * Города, между которыми есть смысл переключаться в блоке районов.
+ * Что показывать вкладками в блоке районов.
  *
- * Это НЕ «выбранные города»: выбрав «1090 Wien», человек снимает с выбора
- * «Wien» целиком (город перекрывает свои районы), но Вена от этого не
- * перестаёт быть местом, где он ищет. Если считать только выбранные города,
- * вкладка «Wien» исчезала бы ровно в момент клика по первому району — прямо
- * под пальцем, вместе с сеткой, в которую он целился дальше.
+ * Ровно два вида: город со своей сеткой районов и земля. Ничего третьего
+ * сюда попадать не должно, и это не вкусовщина — раньше сюда подмешивались
+ * ЛЮБЫЕ выбранные города, включая те, у которых сетки нет. Выбрав Вельс,
+ * человек получал вкладку «Wels», нажимал на неё и упирался в «списка
+ * районов пока нет»: тупик, созданный самим интерфейсом.
+ *
+ * Города идут перед землями, потому что до них человек и дотягивается: он
+ * только что нажал «Graz» в верхнем ряду и ждёт увидеть его районы.
+ *
+ * Вкладка города остаётся видимой, даже когда сам город снят с выбора: выбрав
+ * «Jakomini», человек снимает «Graz» целиком (город перекрывает свои районы),
+ * но Грац от этого не перестаёт быть местом, где он ищет — а вкладка иначе
+ * исчезала бы прямо под пальцем вместе с сеткой.
  */
 function tabCities() {
-  var out = [];
-  chosen.forEach(function (v) {
-    var city = isDistrict(v) ? cityOfDistrict(v) : v;
-    if (out.indexOf(city) === -1) out.push(city);
-  });
-  // Города, у которых район выбрать вообще можно, доступны всегда — иначе,
-  // выбрав Грац, человек терял бы дорогу обратно к районам Вены.
-  citiesWithAreas().forEach(function (city) {
-    if (out.indexOf(city) === -1) out.push(city);
-  });
+  var out = citiesWithAreas();
   if (out.indexOf(activeCity) === -1) out.push(activeCity);
   return out;
 }
@@ -771,14 +929,18 @@ function toggle(v) {
   // города: выбрать «Graz» и «1090 Wien» одновременно совершенно законно.
   if (isDistrict(v)) {
     var city = cityOfDistrict(v);
-    chosen = chosen.filter(function (x) { return x !== city; });
+    // Снимаем сам город, а не ключ вкладки: у земли ключ помечен «land:», и
+    // такой строки в chosen быть не может — она никогда туда не кладётся.
+    chosen = chosen.filter(function (x) { return x !== city && x !== landOf(city); });
     activeCity = city;
   } else if (areasOf(v)) {
     chosen = chosen.filter(function (x) { return cityOfDistrict(x) !== v; });
     activeCity = v;
-  } else {
-    activeCity = v;
   }
+  // Города без своей сетки активными НЕ становятся, и это принципиально:
+  // tabCities дописывает активный ключ во вкладки, и раньше выбор Вельса
+  // создавал вкладку «Wels», которая упиралась в «списка районов пока нет».
+  // Тупик, придуманный самим интерфейсом.
   chosen.push(v);
   render();
 }
@@ -813,9 +975,9 @@ function renderTabs() {
   // название и так стоит в заголовке блока.
   if (cities.length < 2) return;
 
-  cities.forEach(function (city) {
-    box.appendChild(button(city === activeCity ? 'on' : '', esc(city), function () {
-      activeCity = city;
+  cities.forEach(function (key) {
+    box.appendChild(button(key === activeCity ? 'on' : '', esc(tabLabel(key)), function () {
+      activeCity = key;
       render();
     }));
   });
@@ -825,12 +987,13 @@ function renderDistricts() {
   var box = $('districts');
   var list = areasOf(activeCity);
 
-  $('l-districts').textContent = T.districts_of.replace('{city}', activeCity);
+  $('l-districts').textContent = T.districts_of.replace('{city}', tabLabel(activeCity));
 
   box.innerHTML = '';
   // Имена и индексы верстаются по-разному: у индексов ширина фиксированная
   // и предсказуемая, у имён — нет. См. .grid.names в стилях.
-  box.className = 'grid' + (BEZIRKE[activeCity] ? ' names' : '');
+  // Индексы у Вены — узкие предсказуемые плитки, всё остальное — имена.
+  box.className = 'grid' + (DISTRICTS[activeCity] ? '' : ' names');
   $('no-districts').textContent = list ? '' : T.no_districts.replace('{city}', activeCity);
 
   var picked = chosen.filter(function (v) { return cityOfDistrict(v) === activeCity; }).length;
@@ -875,14 +1038,21 @@ function renderChosen() {
 }
 
 function label(v) {
+  // Ключ нормализуем: у Вены значения приходят и от вкладки города «Wien»,
+  // и от вкладки земли «land:Wien» — это одни и те же 23 плитки, и в карте
+  // побеждает та, что записалась последней. Без снятия метки поиск подписи
+  // по DISTRICTS['land:Wien'] не находил ничего, и тег показывал «1090 Wien»
+  // вместо «1090 Alsergrund».
   var city = cityOfDistrict(v);
   if (!city) return v;
+  city = landOf(city) || city;
 
-  // Округ: метку bezirk: человеку показывать незачем, она служебная и нужна
-  // только боту, чтобы отличить округ от имени места (иначе «Graz» совпал бы
-  // подстрокой внутри «Graz-Umgebung»).
-  if (v.indexOf("bezirk:") === 0) {
-    return v.slice("bezirk:".length);
+  // Метки служебные, они нужны только боту и человеку не показываются.
+  // bezirk: отличает округ от имени места (иначе «Graz» совпал бы подстрокой
+  // внутри «Graz-Umgebung»), stadtteil: — район города от округа.
+  if (v.indexOf("bezirk:") === 0) return v.slice("bezirk:".length);
+  if (v.indexOf("stadtteil:") === 0) {
+    return v.slice("stadtteil:".length) + ", " + city;
   }
 
   var code = v.split(' ')[0];
@@ -899,7 +1069,7 @@ function render() {
   // Активный город мог исчезнуть из выбора — тогда показываем первый
   // оставшийся, а если не осталось ни одного, возвращаемся к Вене.
   var cities = tabCities();
-  if (cities.indexOf(activeCity) === -1) activeCity = cities[0] || ALL_VIENNA;
+  if (cities.indexOf(activeCity) === -1) activeCity = cities[0] || landKey(ALL_VIENNA);
 
   renderTabs();
   renderDistricts();
