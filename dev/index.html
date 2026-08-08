@@ -433,6 +433,17 @@ input[type="search"]::-webkit-search-cancel-button { -webkit-appearance: none; }
     </div>
     <input type="checkbox" id="hide-agencies"><div class="track"></div>
   </label>
+
+  <!-- Муниципальное жильё. Выключено по умолчанию: такие объявления приходят
+       всем, как и приходили. Опознаются по тексту и потому неполно, а неполной
+       эвристике нельзя давать отнимать квартиры молча. -->
+  <label class="switch">
+    <div class="body">
+      <div class="title" id="l-gemeinde">Скрывать муниципальное жильё</div>
+      <div class="sub" id="l-gemeinde-sub"></div>
+    </div>
+    <input type="checkbox" id="hide-gemeinde"><div class="track"></div>
+  </label>
 </div>
 
 <button id="fallback-save"></button>
@@ -456,6 +467,8 @@ var I18N = {
     any: "любая", any_m: "любые", from: "от", to: "до",
     agency: "Скрывать объявления агентств",
     agency_sub: "Останутся частные и те, где площадка не сказала, кто сдаёт",
+    gemeinde: "Скрывать муниципальное жильё",
+    gemeinde_sub: "Gemeindewohnung — дешевле, но нужен Wiener Wohn-Ticket",
     save: "СОХРАНИТЬ ФИЛЬТРЫ", searching: "Ищем по Австрии…", empty: "Ничего не нашлось",
     offline: "Поиск по адресу сейчас недоступен"
   },
@@ -467,6 +480,8 @@ var I18N = {
     any: "будь-яка", any_m: "будь-які", from: "від", to: "до",
     agency: "Приховувати оголошення агенцій",
     agency_sub: "Залишаться приватні й ті, де майданчик не сказав, хто здає",
+    gemeinde: "Приховувати муніципальне житло",
+    gemeinde_sub: "Gemeindewohnung — дешевше, але потрібен Wiener Wohn-Ticket",
     save: "ЗБЕРЕГТИ ФІЛЬТРИ", searching: "Шукаємо по Австрії…", empty: "Нічого не знайшлось",
     offline: "Пошук за адресою зараз недоступний"
   },
@@ -478,6 +493,8 @@ var I18N = {
     any: "any", any_m: "any", from: "from", to: "up to",
     agency: "Hide agency listings",
     agency_sub: "Keeps private ones and those where the site did not say",
+    gemeinde: "Hide council flats",
+    gemeinde_sub: "Gemeindewohnung — cheaper, but needs a Wiener Wohn-Ticket",
     save: "SAVE FILTERS", searching: "Searching Austria…", empty: "Nothing found",
     offline: "Address search is unavailable right now"
   },
@@ -489,6 +506,8 @@ var I18N = {
     any: "beliebig", any_m: "beliebig", from: "ab", to: "bis",
     agency: "Maklerinserate ausblenden",
     agency_sub: "Privatangebote bleiben, ebenso Inserate ohne Angabe",
+    gemeinde: "Gemeindewohnungen ausblenden",
+    gemeinde_sub: "Günstiger, aber ein Wiener Wohn-Ticket ist nötig",
     save: "FILTER SPEICHERN", searching: "Suche in Österreich…", empty: "Nichts gefunden",
     offline: "Adresssuche ist gerade nicht verfügbar"
   }
@@ -1310,7 +1329,9 @@ function restore(id, name, fallbackToBound) {
   $('l-sq').textContent = T.sq;
   $('l-rooms').textContent = T.rooms;
   $('l-agency').textContent = T.agency;
+  $('l-gemeinde').textContent = T.gemeinde;
   $('l-agency-sub').textContent = T.agency_sub;
+  $('l-gemeinde-sub').textContent = T.gemeinde_sub;
   $('q').placeholder = T.search_ph;
   $('fallback-save').textContent = T.save;
 
@@ -1329,6 +1350,7 @@ function restore(id, name, fallbackToBound) {
   restore('rooms-min', 'min_rooms', 1);
   restore('rooms-max', 'max_rooms', 6);
   $('hide-agencies').checked = params.get('hide_agencies') === '1';
+  $('hide-gemeinde').checked = params.get('hide_gemeinde') === '1';
 
   render();
   paintPrice(); paintSq(); paintRooms();
@@ -1353,7 +1375,8 @@ function save() {
     price: bound('price'),
     square_meters: bound('sq'),
     rooms: bound('rooms'),
-    hide_agencies: $('hide-agencies').checked
+    hide_agencies: $('hide-agencies').checked,
+    hide_gemeinde: $('hide-gemeinde').checked
   };
   if (tg) tg.sendData(JSON.stringify(data));
   else console.log(JSON.stringify(data, null, 2));
